@@ -43,4 +43,15 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshTokenEntity
     @Transactional
     @Query("DELETE FROM RefreshTokenEntity rt WHERE rt.expiresAt < :now")
     int deleteExpired(@Param("now") Instant now);
+
+    /**
+     * Revokes every not-yet-revoked token of the given user.
+     *
+     * @return the number of rows updated
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE RefreshTokenEntity rt SET rt.revoked = true, rt.revokedAt = :now "
+            + "WHERE rt.userId = :userId AND rt.revoked = false")
+    int revokeAllByUserId(@Param("userId") Integer userId, @Param("now") Instant now);
 }

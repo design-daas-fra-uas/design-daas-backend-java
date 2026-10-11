@@ -36,4 +36,15 @@ public interface AccessTokenRepository extends JpaRepository<AccessTokenEntity, 
     @Transactional
     @Query("DELETE FROM AccessTokenEntity at WHERE at.expiresAt < :now")
     int deleteExpired(@Param("now") Instant now);
+
+    /**
+     * Revokes every not-yet-revoked token of the given user.
+     *
+     * @return the number of rows updated
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE AccessTokenEntity at SET at.revoked = true, at.revokedAt = :now "
+            + "WHERE at.userId = :userId AND at.revoked = false")
+    int revokeAllByUserId(@Param("userId") Integer userId, @Param("now") Instant now);
 }
