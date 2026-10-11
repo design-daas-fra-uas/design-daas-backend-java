@@ -22,7 +22,9 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.security.SecureRandom;
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -53,6 +55,7 @@ public class UserService {
     private final MailService mailService;
     private final AccountValidator accountValidator;
     private final ApplicationEventPublisher eventPublisher;
+    private final Clock clock;
 
     /**
      * Registers a new, disabled user and emails them a registration code that must be
@@ -73,8 +76,7 @@ public class UserService {
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setEnabled(false);
-        user.setRegistrationCode(generateRegistrationCode());
-        user.setRegistrationCodeTimeout(LocalDateTime.now().plusHours(REGISTRATION_CODE_TIMEOUT_HOURS));
+        issueRegistrationCode(user);
         if (request.getGroups() != null && !request.getGroups().isEmpty()) {
             user.setGroups(loadGroupsOrThrow(request.getGroups()));
         }
@@ -108,12 +110,12 @@ public class UserService {
             return false;
         }
         if (user.getRegistrationCodeTimeout() != null
-                && LocalDateTime.now().isAfter(user.getRegistrationCodeTimeout())) {
+                && Instant.now(clock).isAfter(user.getRegistrationCodeTimeout())) {
             log.warn("validateEmail — registration code expired for email={}", LogMasking.maskEmail(email));
             return false;
         }
         user.setEnabled(true);
-        user.setRegistrationUsedMoment(LocalDateTime.now());
+        user.setRegistrationUsedMoment(Instant.now(clock));
         user.setRegistrationCode(null);
         userRepository.save(user);
         log.info("validateEmail — email verified for userId={} email={}", user.getId(), LogMasking.maskEmail(email));
