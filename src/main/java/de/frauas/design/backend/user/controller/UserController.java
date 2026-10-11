@@ -13,6 +13,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -43,14 +44,14 @@ public class UserController {
      * {@link #validateEmail} succeeds.
      *
      * @param request the new user's details
-     * @return 200 OK with the created {@link UserDto}
+     * @return 201 Created with no body
      */
     @PostMapping("/user")
-    public ResponseEntity<UserDto> createUser(@Valid @RequestBody CreateUserRequest request) {
+    public ResponseEntity<Void> createUser(@Valid @RequestBody CreateUserRequest request) {
         log.info("POST /user — registering new user email={}", LogMasking.maskEmail(request.getEmail()));
         UserDto result = userService.createUser(request);
         log.info("POST /user — user created id={} email={}", result.getId(), LogMasking.maskEmail(result.getEmail()));
-        return ResponseEntity.ok(result);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     /**
@@ -128,30 +129,30 @@ public class UserController {
      * Re-enables a previously disabled user account (admin-only).
      *
      * @param userId the ID of the user to enable
-     * @return 200 OK with the updated {@link UserDto}
+     * @return 204 No Content
      */
-    @PostMapping("/user/{userId}/enable")
+    @PatchMapping("/user/{userId}/enable")
     @PreAuthorize(Authorities.IS_ADMIN)
-    public ResponseEntity<UserDto> enableUser(@PathVariable Integer userId) {
-        log.info("POST /user/{}/enable — enabling user", userId);
-        UserDto result = userService.enableUser(userId);
-        log.info("POST /user/{}/enable — user enabled", userId);
-        return ResponseEntity.ok(result);
+    public ResponseEntity<Void> enableUser(@PathVariable Integer userId) {
+        log.info("PATCH /user/{}/enable — enabling user", userId);
+        userService.enableUser(userId);
+        log.info("PATCH /user/{}/enable — user enabled", userId);
+        return ResponseEntity.noContent().build();
     }
 
     /**
      * Disables a user account, preventing further logins (admin-only).
      *
      * @param userId the ID of the user to disable
-     * @return 200 OK with the updated {@link UserDto}
+     * @return 204 No Content
      */
-    @PostMapping("/user/{userId}/disable")
+    @PatchMapping("/user/{userId}/disable")
     @PreAuthorize(Authorities.IS_ADMIN)
-    public ResponseEntity<UserDto> disableUser(@PathVariable Integer userId) {
-        log.info("POST /user/{}/disable — disabling user", userId);
-        UserDto result = userService.disableUser(userId);
-        log.info("POST /user/{}/disable — user disabled", userId);
-        return ResponseEntity.ok(result);
+    public ResponseEntity<Void> disableUser(@PathVariable Integer userId) {
+        log.info("PATCH /user/{}/disable — disabling user", userId);
+        userService.disableUser(userId);
+        log.info("PATCH /user/{}/disable — user disabled", userId);
+        return ResponseEntity.noContent().build();
     }
 
     /**

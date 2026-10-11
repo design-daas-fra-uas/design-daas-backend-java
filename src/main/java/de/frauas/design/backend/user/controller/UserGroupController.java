@@ -6,6 +6,7 @@ import de.frauas.design.backend.user.service.UserGroupService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -48,14 +49,14 @@ public class UserGroupController {
      * by {@link UserGroupService#createUserGroup}, not here.
      *
      * @param request the group to create
-     * @return 200 OK with the created {@link UserGroupDto}
+     * @return 201 Created with no body
      */
     @PostMapping("/user_group")
-    public ResponseEntity<UserGroupDto> createUserGroup(@Valid @RequestBody UserGroupDto request) {
+    public ResponseEntity<Void> createUserGroup(@Valid @RequestBody UserGroupDto request) {
         log.info("POST /user_group — creating user group name={}", request.getName());
         UserGroupDto result = userGroupService.createUserGroup(request);
         log.info("POST /user_group — user group created id={} name={}", result.getId(), result.getName());
-        return ResponseEntity.ok(result);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     /**
