@@ -123,6 +123,31 @@ public class UserService {
     }
 
     /**
+     * Issues a fresh registration code for a still-unverified account and e-mails it again.
+     *
+     * <p>Silent by design: unknown, already-verified and admin accounts are ignored so the
+     * endpoint cannot be used to find out which e-mail addresses are registered. The
+     * previous code is replaced, so only the newest e-mail is valid.</p>
+     *
+     * @param email the address the original registration was made with
+     */
+    @Transactional
+    public void resendRegistrationCode(String email) {
+        log.debug("resendRegistrationCode — email={}", LogMasking.maskEmail(email));
+        Optional<BaseUser> opt = userRepository.findByEmail(email);
+        if (opt.isEmpty() || !(opt.get() instanceof User user) || user.isEnabled()) {
+            log.info("resendRegistrationCode — no pending registration for email={}", LogMasking.maskEmail(email));
+            return;
+        }
+        issueRegistrationCode(user);
+        userRepository.save(user);
+        String address = user.getEmail();
+        String code = user.getRegistrationCode();
+        runAfterCommit(() -> mailService.sendRegistrationCode(address, code, REGISTRATION_CODE_TIMEOUT_HOURS));
+        log.info("resendRegistrationCode — new code issued userId={}", user.getId());
+    }
+
+    /**
      * Returns every regular user, unpaginated.
      *
      * @return all users
@@ -268,6 +293,11 @@ public class UserService {
         } else {
             action.run();
         }
+    }
+
+    private void issueRegistrationCode(User user) {
+        user.setRegistrationCode(generateRegistrationCode());
+        user.setRegistrationCodeTimeout(Instant.now(clock).plus(REGISTRATION_CODE_TIMEOUT_HOURS, ChronoUnit.HOURS));
     }
 
     private String generateRegistrationCode() {

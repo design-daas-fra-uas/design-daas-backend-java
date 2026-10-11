@@ -5,6 +5,7 @@ import de.frauas.design.backend.shared.security.Authorities;
 import de.frauas.design.backend.shared.util.LogMasking;
 import de.frauas.design.backend.user.dto.CreateUserRequest;
 import de.frauas.design.backend.user.dto.PatchUserRequest;
+import de.frauas.design.backend.user.dto.ResendCodeRequest;
 import de.frauas.design.backend.user.dto.UserDto;
 import de.frauas.design.backend.user.dto.ValidateEmailRequest;
 import de.frauas.design.backend.user.service.UserService;
@@ -73,6 +74,22 @@ public class UserController {
                     LogMasking.maskEmail(request.getEmail()));
         }
         return ok ? ResponseEntity.ok().build() : ResponseEntity.badRequest().build();
+    }
+
+    /**
+     * Sends a new registration code to an account whose e-mail is still unverified.
+     *
+     * <p>Always answers 202 Accepted, whether or not the address belongs to a pending
+     * account, so the endpoint cannot be used to enumerate registered users.</p>
+     *
+     * @param request the e-mail address used at registration
+     * @return 202 Accepted
+     */
+    @PostMapping("/user/resend_code")
+    public ResponseEntity<Void> resendCode(@Valid @RequestBody ResendCodeRequest request) {
+        log.info("POST /user/resend_code — email={}", LogMasking.maskEmail(request.getEmail()));
+        userService.resendRegistrationCode(request.getEmail());
+        return ResponseEntity.accepted().build();
     }
 
     /**
