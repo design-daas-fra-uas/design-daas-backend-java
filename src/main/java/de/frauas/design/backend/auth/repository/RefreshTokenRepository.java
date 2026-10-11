@@ -8,7 +8,6 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -29,8 +28,8 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshTokenEntity
     @Query("SELECT rt FROM RefreshTokenEntity rt WHERE rt.tokenValue = :tokenValue AND rt.revoked = false")
     Optional<RefreshTokenEntity> findActiveByTokenValue(@Param("tokenValue") String tokenValue);
 
+    /** Bulk delete; callers must already be inside a transaction. */
     @Modifying
-    @Transactional
     @Query("DELETE FROM RefreshTokenEntity rt WHERE rt.userId = :userId")
     void deleteByUserId(@Param("userId") Integer userId);
 
@@ -40,7 +39,6 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshTokenEntity
      * @return the number of rows deleted
      */
     @Modifying
-    @Transactional
     @Query("DELETE FROM RefreshTokenEntity rt WHERE rt.expiresAt < :now")
     int deleteExpired(@Param("now") Instant now);
 
@@ -50,7 +48,6 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshTokenEntity
      * @return the number of rows updated
      */
     @Modifying
-    @Transactional
     @Query("UPDATE RefreshTokenEntity rt SET rt.revoked = true, rt.revokedAt = :now "
             + "WHERE rt.userId = :userId AND rt.revoked = false")
     int revokeAllByUserId(@Param("userId") Integer userId, @Param("now") Instant now);
