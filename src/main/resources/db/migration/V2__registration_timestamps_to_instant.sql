@@ -7,5 +7,5 @@
 -- ============================================================
 
 ALTER TABLE users
-    MODIFY registration_code_timeout TIMESTAMP(6) NULL DEFAULT NULL,
-    MODIFY registration_used_moment  TIMESTAMP(6) NULL DEFAULT NULL;
+    MODIFY registration_code_timeout TIMESTAMP (6) NULL DEFAULT NULL,
+    MODIFY registration_used_moment TIMESTAMP (6) NULL DEFAULT NULL;

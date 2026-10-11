@@ -13,4 +13,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param userId the user's numeric id (the JWT's {@code sub} claim)
  * @param name   the user's display name
  */
-public record SessionInfoDto(@JsonProperty("user_id") Integer userId, @JsonProperty("name") String name) {}
+public record SessionInfoDto(
+        @JsonProperty("user_id") Integer userId,
+        @JsonProperty("name") String name) {}

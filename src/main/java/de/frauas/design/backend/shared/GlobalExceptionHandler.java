@@ -102,11 +102,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
      */
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(
-            Exception ex,
-            @Nullable Object body,
-            HttpHeaders headers,
-            HttpStatusCode statusCode,
-            WebRequest request) {
+            Exception ex, @Nullable Object body, HttpHeaders headers, HttpStatusCode statusCode, WebRequest request) {
         String message = body instanceof ProblemDetail problem && problem.getDetail() != null
                 ? problem.getDetail()
                 : HttpStatus.valueOf(statusCode.value()).getReasonPhrase();

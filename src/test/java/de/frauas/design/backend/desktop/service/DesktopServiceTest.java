@@ -107,7 +107,9 @@ class DesktopServiceTest {
             ArgumentCaptor<DesktopGroup> captor = ArgumentCaptor.forClass(DesktopGroup.class);
             verify(desktopGroupRepository).save(captor.capture());
             assertThat(captor.getValue().getDescription()).isEqualTo("Sub Group");
-            assertThat(captor.getValue().getDesktops()).extracting(Desktop::getId).containsExactly(10);
+            assertThat(captor.getValue().getDesktops())
+                    .extracting(Desktop::getId)
+                    .containsExactly(10);
         }
 
         @Test

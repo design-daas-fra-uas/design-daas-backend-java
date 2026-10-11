@@ -34,7 +34,8 @@ class DesktopGroupControllerTest {
     @Test
     @DisplayName("getAllDesktopGroups returns 200 with the service response")
     void getAllDesktopGroups_returnsOk() {
-        DesktopGroupDto group = DesktopGroupDto.builder().id(1).description("DG1").build();
+        DesktopGroupDto group =
+                DesktopGroupDto.builder().id(1).description("DG1").build();
         when(desktopService.getAllDesktopGroups()).thenReturn(List.of(group));
 
         var response = desktopGroupController.getAllDesktopGroups();
@@ -61,7 +62,9 @@ class DesktopGroupControllerTest {
     void createDesktopGroup_duplicate_propagatesException() {
         DesktopGroupCreateRequest request = new DesktopGroupCreateRequest();
         request.setDescription("Group 1");
-        doThrow(new DesktopGroupAlreadyExistsException("Group 1")).when(desktopService).createDesktopGroup(request);
+        doThrow(new DesktopGroupAlreadyExistsException("Group 1"))
+                .when(desktopService)
+                .createDesktopGroup(request);
 
         assertThatThrownBy(() -> desktopGroupController.createDesktopGroup(request))
                 .isInstanceOf(DesktopGroupAlreadyExistsException.class);

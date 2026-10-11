@@ -7,7 +7,6 @@ import org.springframework.scheduling.annotation.AsyncConfigurer;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
-import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * Configures the executor behind {@code @Async} (currently e-mail sending).
@@ -45,7 +44,7 @@ public class AsyncConfig implements AsyncConfigurer {
 
     @Override
     public AsyncUncaughtExceptionHandler getAsyncUncaughtExceptionHandler() {
-        return (ex, method, params) ->
-                log.error("Async method {}#{} failed", method.getDeclaringClass().getSimpleName(), method.getName(), ex);
+        return (ex, method, params) -> log.error(
+                "Async method {}#{} failed", method.getDeclaringClass().getSimpleName(), method.getName(), ex);
     }
 }

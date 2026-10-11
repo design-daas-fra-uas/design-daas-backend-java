@@ -40,8 +40,7 @@ class DesktopControllerIntegrationTest extends BaseIntegrationTest {
     @Order(2)
     @DisplayName("POST /desktop – creates desktop with admin JWT")
     void createDesktop_adminJwt_returns201() throws Exception {
-        String body = objectMapper.writeValueAsString(Map.of(
-                "description", "Integration Test Desktop"));
+        String body = objectMapper.writeValueAsString(Map.of("description", "Integration Test Desktop"));
 
         mockMvc.perform(post("/desktop")
                         .with(adminJwt(999))
@@ -68,8 +67,7 @@ class DesktopControllerIntegrationTest extends BaseIntegrationTest {
     @Order(3)
     @DisplayName("POST /desktop – returns 403 with user JWT")
     void createDesktop_userJwt_returns403() throws Exception {
-        String body = objectMapper.writeValueAsString(Map.of(
-                "description", "Should not be created"));
+        String body = objectMapper.writeValueAsString(Map.of("description", "Should not be created"));
 
         mockMvc.perform(post("/desktop")
                         .with(userJwt(1))

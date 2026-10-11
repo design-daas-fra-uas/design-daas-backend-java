@@ -68,7 +68,8 @@ public class UserGroupController {
      * @return 200 OK with the updated {@link UserGroupDto}
      */
     @PatchMapping("/user_group/{id}")
-    public ResponseEntity<UserGroupDto> updateUserGroup(@PathVariable Integer id, @Valid @RequestBody UserGroupDto request) {
+    public ResponseEntity<UserGroupDto> updateUserGroup(
+            @PathVariable Integer id, @Valid @RequestBody UserGroupDto request) {
         log.info("PATCH /user_group/{} — updating user group", id);
         UserGroupDto result = userGroupService.updateUserGroup(id, request);
         log.info("PATCH /user_group/{} — updated successfully", id);

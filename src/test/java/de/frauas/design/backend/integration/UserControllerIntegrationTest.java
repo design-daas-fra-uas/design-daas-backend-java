@@ -242,8 +242,7 @@ class UserControllerIntegrationTest extends BaseIntegrationTest {
                 .andExpect(content().string(""));
         assertFalse(userRepository.findById(id).orElseThrow().isEnabled());
 
-        mockMvc.perform(patch("/user/" + id + "/enable").with(adminJwt(999)))
-                .andExpect(status().isNoContent());
+        mockMvc.perform(patch("/user/" + id + "/enable").with(adminJwt(999))).andExpect(status().isNoContent());
         assertTrue(userRepository.findById(id).orElseThrow().isEnabled());
     }
 }

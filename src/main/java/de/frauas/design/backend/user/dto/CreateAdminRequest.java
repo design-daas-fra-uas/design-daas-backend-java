@@ -20,8 +20,6 @@ public class CreateAdminRequest {
     private String email;
 
     @NotBlank
-    @Pattern(
-            regexp = PasswordPolicy.PASSWORD_REGEX,
-            message = PasswordPolicy.MESSAGE)
+    @Pattern(regexp = PasswordPolicy.PASSWORD_REGEX, message = PasswordPolicy.MESSAGE)
     private String password;
 }

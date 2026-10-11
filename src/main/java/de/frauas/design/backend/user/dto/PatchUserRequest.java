@@ -25,9 +25,7 @@ public class PatchUserRequest {
     @Email(message = "email must be a valid e-mail address")
     private String email;
 
-    @Pattern(
-            regexp = PasswordPolicy.PASSWORD_REGEX,
-            message = PasswordPolicy.MESSAGE)
+    @Pattern(regexp = PasswordPolicy.PASSWORD_REGEX, message = PasswordPolicy.MESSAGE)
     private String password;
 
     private List<Integer> groups;

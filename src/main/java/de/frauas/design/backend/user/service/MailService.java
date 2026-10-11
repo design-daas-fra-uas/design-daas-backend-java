@@ -62,7 +62,8 @@ public class MailService {
                     "Mail disabled — skipping registration email to {} (expiresInHours={})",
                     LogMasking.maskEmail(toEmail),
                     expiresInHours);
-            log.debug("Mail disabled — registration code for {} is {}", LogMasking.maskEmail(toEmail), registrationCode);
+            log.debug(
+                    "Mail disabled — registration code for {} is {}", LogMasking.maskEmail(toEmail), registrationCode);
             return;
         }
         Context context = new Context();

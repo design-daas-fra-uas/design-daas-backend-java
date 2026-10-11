@@ -25,9 +25,7 @@ public class CreateUserRequest {
     private String email;
 
     @NotBlank
-    @Pattern(
-            regexp = PasswordPolicy.PASSWORD_REGEX,
-            message = PasswordPolicy.MESSAGE)
+    @Pattern(regexp = PasswordPolicy.PASSWORD_REGEX, message = PasswordPolicy.MESSAGE)
     private String password;
 
     /** Optional — assign the user to these UserGroup IDs on creation. */

@@ -83,7 +83,9 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     }
 
     private boolean isRateLimitedPath(String path) {
-        return AUTH_TOKEN_PATH.equals(path) || REGISTER_PATH.equals(path) || VALIDATE_EMAIL_PATH.equals(path)
+        return AUTH_TOKEN_PATH.equals(path)
+                || REGISTER_PATH.equals(path)
+                || VALIDATE_EMAIL_PATH.equals(path)
                 || RESEND_CODE_PATH.equals(path);
     }
 

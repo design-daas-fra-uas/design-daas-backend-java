@@ -23,6 +23,7 @@ import java.util.List;
 @AllArgsConstructor
 public class UserGroupDto {
     private Integer id;
+
     @Size(max = 255)
     private String name;
 

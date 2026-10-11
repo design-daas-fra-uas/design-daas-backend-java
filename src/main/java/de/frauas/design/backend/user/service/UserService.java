@@ -1,5 +1,6 @@
 package de.frauas.design.backend.user.service;
 
+import de.frauas.design.backend.shared.event.UserSessionsInvalidatedEvent;
 import de.frauas.design.backend.shared.util.LogMasking;
 import de.frauas.design.backend.user.dto.CreateUserRequest;
 import de.frauas.design.backend.user.dto.PatchUserRequest;
@@ -11,7 +12,6 @@ import de.frauas.design.backend.user.model.User;
 import de.frauas.design.backend.user.model.UserGroup;
 import de.frauas.design.backend.user.repository.UserGroupRepository;
 import de.frauas.design.backend.user.repository.UserRepository;
-import de.frauas.design.backend.shared.event.UserSessionsInvalidatedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -84,7 +84,8 @@ public class UserService {
         log.info("createUser — user created id={} email={}", user.getId(), LogMasking.maskEmail(user.getEmail()));
         String email = user.getEmail();
         String registrationCode = user.getRegistrationCode();
-        runAfterCommit(() -> mailService.sendRegistrationCode(email, registrationCode, REGISTRATION_CODE_TIMEOUT_HOURS));
+        runAfterCommit(
+                () -> mailService.sendRegistrationCode(email, registrationCode, REGISTRATION_CODE_TIMEOUT_HOURS));
         return UserDto.from(user);
     }
 

@@ -17,7 +17,8 @@ class SecurityPropertiesTest {
     void swaggerPublic_isBindable() {
         Binder binder = new Binder(new MapConfigurationPropertySource(Map.of("app.security.swagger-public", "true")));
 
-        SecurityProperties props = binder.bind("app.security", SecurityProperties.class).get();
+        SecurityProperties props =
+                binder.bind("app.security", SecurityProperties.class).get();
 
         assertThat(props.isSwaggerPublic()).isTrue();
     }

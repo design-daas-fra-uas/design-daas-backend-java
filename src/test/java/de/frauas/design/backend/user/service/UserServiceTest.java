@@ -31,8 +31,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -66,8 +66,14 @@ class UserServiceTest {
         // repository — its behaviour is simple enough not to need its own mock here,
         // and using the real thing keeps these tests exercising the actual validation rules.
         AccountValidator accountValidator = new AccountValidator(userRepository);
-        userService =
-                new UserService(userRepository, userGroupRepository, passwordEncoder, mailService, accountValidator, eventPublisher, Clock.systemUTC());
+        userService = new UserService(
+                userRepository,
+                userGroupRepository,
+                passwordEncoder,
+                mailService,
+                accountValidator,
+                eventPublisher,
+                Clock.systemUTC());
     }
 
     // -------------------------------------------------------------------------

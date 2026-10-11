@@ -12,7 +12,6 @@ import de.frauas.design.backend.desktop.model.Desktop;
 import de.frauas.design.backend.desktop.model.DesktopGroup;
 import de.frauas.design.backend.desktop.repository.DesktopGroupRepository;
 import de.frauas.design.backend.desktop.repository.DesktopRepository;
-import de.frauas.design.backend.user.dto.UserGroupDto;
 import de.frauas.design.backend.user.exception.UserGroupNotFoundException;
 import de.frauas.design.backend.user.model.UserGroup;
 import de.frauas.design.backend.user.repository.UserGroupRepository;
