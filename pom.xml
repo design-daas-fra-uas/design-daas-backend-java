@@ -13,7 +13,7 @@
 
     <groupId>de.frauas.design</groupId>
     <artifactId>design-daas-backend</artifactId>
-    <version>1.2.0</version>
+    <version>2.0.0</version>
     <name>design-daas-backend</name>
     <description>Design DaaS Java Backend</description>
 
@@ -130,6 +130,10 @@
             <artifactId>archunit-junit5</artifactId>
             <version>1.4.1</version>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
     </dependencies>
 

@@ -35,6 +35,7 @@ import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.Optional;
 
+import static java.time.Clock.systemUTC;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -76,10 +77,16 @@ class TokenServiceTest {
 
     @BeforeEach
     void setUp() {
-        AccountLockoutService accountLockoutService = new AccountLockoutService(userRepository);
+        AccountLockoutService accountLockoutService = new AccountLockoutService(userRepository, systemUTC());
         ScopeResolver scopeResolver = new ScopeResolver();
         TokenIssuer tokenIssuer = new TokenIssuer(
-                jwtEncoder, refreshTokenRepository, accessTokenRepository, "http://localhost:8080", 3600L, 30L);
+                jwtEncoder,
+                refreshTokenRepository,
+                accessTokenRepository,
+                systemUTC(),
+                "http://localhost:8080",
+                3600L,
+                30L);
 
         tokenService = new TokenService(
                 userRepository,
@@ -87,7 +94,8 @@ class TokenServiceTest {
                 refreshTokenRepository,
                 accountLockoutService,
                 scopeResolver,
-                tokenIssuer);
+                tokenIssuer,
+                systemUTC());
     }
 
     private User user() {

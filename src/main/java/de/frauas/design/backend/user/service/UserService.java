@@ -1,5 +1,6 @@
 package de.frauas.design.backend.user.service;
 
+import de.frauas.design.backend.shared.event.UserSessionsInvalidatedEvent;
 import de.frauas.design.backend.shared.util.LogMasking;
 import de.frauas.design.backend.user.dto.CreateUserRequest;
 import de.frauas.design.backend.user.dto.PatchUserRequest;
@@ -13,12 +14,17 @@ import de.frauas.design.backend.user.repository.UserGroupRepository;
 import de.frauas.design.backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.security.SecureRandom;
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -48,6 +54,8 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final MailService mailService;
     private final AccountValidator accountValidator;
+    private final ApplicationEventPublisher eventPublisher;
+    private final Clock clock;
 
     /**
      * Registers a new, disabled user and emails them a registration code that must be
@@ -68,14 +76,16 @@ public class UserService {
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setEnabled(false);
-        user.setRegistrationCode(generateRegistrationCode());
-        user.setRegistrationCodeTimeout(LocalDateTime.now().plusHours(REGISTRATION_CODE_TIMEOUT_HOURS));
+        issueRegistrationCode(user);
         if (request.getGroups() != null && !request.getGroups().isEmpty()) {
             user.setGroups(loadGroupsOrThrow(request.getGroups()));
         }
         userRepository.save(user);
         log.info("createUser — user created id={} email={}", user.getId(), LogMasking.maskEmail(user.getEmail()));
-        mailService.sendRegistrationCode(user.getEmail(), user.getRegistrationCode(), REGISTRATION_CODE_TIMEOUT_HOURS);
+        String email = user.getEmail();
+        String registrationCode = user.getRegistrationCode();
+        runAfterCommit(
+                () -> mailService.sendRegistrationCode(email, registrationCode, REGISTRATION_CODE_TIMEOUT_HOURS));
         return UserDto.from(user);
     }
 
@@ -101,16 +111,41 @@ public class UserService {
             return false;
         }
         if (user.getRegistrationCodeTimeout() != null
-                && LocalDateTime.now().isAfter(user.getRegistrationCodeTimeout())) {
+                && Instant.now(clock).isAfter(user.getRegistrationCodeTimeout())) {
             log.warn("validateEmail — registration code expired for email={}", LogMasking.maskEmail(email));
             return false;
         }
         user.setEnabled(true);
-        user.setRegistrationUsedMoment(LocalDateTime.now());
+        user.setRegistrationUsedMoment(Instant.now(clock));
         user.setRegistrationCode(null);
         userRepository.save(user);
         log.info("validateEmail — email verified for userId={} email={}", user.getId(), LogMasking.maskEmail(email));
         return true;
+    }
+
+    /**
+     * Issues a fresh registration code for a still-unverified account and e-mails it again.
+     *
+     * <p>Silent by design: unknown, already-verified and admin accounts are ignored so the
+     * endpoint cannot be used to find out which e-mail addresses are registered. The
+     * previous code is replaced, so only the newest e-mail is valid.</p>
+     *
+     * @param email the address the original registration was made with
+     */
+    @Transactional
+    public void resendRegistrationCode(String email) {
+        log.debug("resendRegistrationCode — email={}", LogMasking.maskEmail(email));
+        Optional<BaseUser> opt = userRepository.findByEmail(email);
+        if (opt.isEmpty() || !(opt.get() instanceof User user) || user.isEnabled()) {
+            log.info("resendRegistrationCode — no pending registration for email={}", LogMasking.maskEmail(email));
+            return;
+        }
+        issueRegistrationCode(user);
+        userRepository.save(user);
+        String address = user.getEmail();
+        String code = user.getRegistrationCode();
+        runAfterCommit(() -> mailService.sendRegistrationCode(address, code, REGISTRATION_CODE_TIMEOUT_HOURS));
+        log.info("resendRegistrationCode — new code issued userId={}", user.getId());
     }
 
     /**
@@ -150,6 +185,7 @@ public class UserService {
         if (request.getPassword() != null) {
             accountValidator.validatePassword(request.getPassword());
             user.setPassword(passwordEncoder.encode(request.getPassword()));
+            eventPublisher.publishEvent(new UserSessionsInvalidatedEvent(id));
         }
         if (request.getGroups() != null) {
             user.setGroups(loadGroupsOrThrow(request.getGroups()));
@@ -189,6 +225,7 @@ public class UserService {
         User user = getUserOrThrow(id);
         user.setEnabled(false);
         userRepository.save(user);
+        eventPublisher.publishEvent(new UserSessionsInvalidatedEvent(id));
         log.info("disableUser — user disabled id={}", id);
         return UserDto.from(user);
     }
@@ -205,8 +242,10 @@ public class UserService {
     public void requestApplication(Integer userId, String application) {
         log.debug("requestApplication — userId={} application={}", userId, application);
         BaseUser baseUser = userRepository.findById(userId).orElseThrow(() -> new AccountNotFoundException(userId));
-        mailService.sendApplicationRequestEmail(
-                baseUser.getEmail(), baseUser.getName(), String.valueOf(baseUser.getId()), application);
+        String email = baseUser.getEmail();
+        String name = baseUser.getName();
+        String id = String.valueOf(baseUser.getId());
+        runAfterCommit(() -> mailService.sendApplicationRequestEmail(email, name, id, application));
         log.info("requestApplication — email sent for userId={} application={}", userId, application);
     }
 
@@ -235,6 +274,31 @@ public class UserService {
             throw new IllegalArgumentException("Unknown user group ids: " + missingIds);
         }
         return groups;
+    }
+
+    /**
+     * Runs {@code action} once the current transaction commits, so slow I/O (e.g. SMTP
+     * sends) never keeps database locks held longer than necessary. Falls back to running
+     * immediately if no transaction is active (e.g. during tests).
+     *
+     * @param action the work to defer until after commit
+     */
+    private void runAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
+    }
+
+    private void issueRegistrationCode(User user) {
+        user.setRegistrationCode(generateRegistrationCode());
+        user.setRegistrationCodeTimeout(Instant.now(clock).plus(REGISTRATION_CODE_TIMEOUT_HOURS, ChronoUnit.HOURS));
     }
 
     private String generateRegistrationCode() {

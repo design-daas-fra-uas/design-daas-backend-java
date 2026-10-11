@@ -15,9 +15,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -27,7 +30,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -50,6 +55,9 @@ class UserServiceTest {
     @Mock
     MailService mailService;
 
+    @Mock
+    ApplicationEventPublisher eventPublisher;
+
     UserService userService;
 
     @BeforeEach
@@ -58,8 +66,14 @@ class UserServiceTest {
         // repository — its behaviour is simple enough not to need its own mock here,
         // and using the real thing keeps these tests exercising the actual validation rules.
         AccountValidator accountValidator = new AccountValidator(userRepository);
-        userService =
-                new UserService(userRepository, userGroupRepository, passwordEncoder, mailService, accountValidator);
+        userService = new UserService(
+                userRepository,
+                userGroupRepository,
+                passwordEncoder,
+                mailService,
+                accountValidator,
+                eventPublisher,
+                Clock.systemUTC());
     }
 
     // -------------------------------------------------------------------------
@@ -74,7 +88,7 @@ class UserServiceTest {
         u.setPassword("encoded");
         u.setEnabled(enabled);
         u.setRegistrationCode("ABCD1234");
-        u.setRegistrationCodeTimeout(LocalDateTime.now().plusHours(1));
+        u.setRegistrationCodeTimeout(Instant.now().plus(1, ChronoUnit.HOURS));
         return u;
     }
 
@@ -146,7 +160,7 @@ class UserServiceTest {
 
             assertThatThrownBy(() -> userService.createUser(req))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("Password must be at least 8");
+                    .hasMessageContaining("password must be 8-72");
         }
 
         @Test
@@ -233,6 +247,49 @@ class UserServiceTest {
     // -------------------------------------------------------------------------
 
     @Nested
+    @DisplayName("resendRegistrationCode")
+    class ResendRegistrationCode {
+
+        @Test
+        @DisplayName("issues a fresh code and mails it for an unverified user")
+        void resend_pendingUser_issuesNewCodeAndMails() {
+            User u = makeUser(1, "alice@example.com", false);
+            when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
+
+            userService.resendRegistrationCode("alice@example.com");
+
+            assertThat(u.getRegistrationCode()).isNotEqualTo("ABCD1234").hasSize(8);
+            assertThat(u.getRegistrationCodeTimeout()).isAfter(Instant.now());
+            verify(userRepository).save(u);
+            verify(mailService).sendRegistrationCode(eq("alice@example.com"), eq(u.getRegistrationCode()), anyInt());
+        }
+
+        @Test
+        @DisplayName("does nothing for an unknown e-mail")
+        void resend_unknownEmail_isSilent() {
+            when(userRepository.findByEmail("nobody@example.com")).thenReturn(Optional.empty());
+
+            userService.resendRegistrationCode("nobody@example.com");
+
+            verify(userRepository, never()).save(any());
+            verify(mailService, never()).sendRegistrationCode(any(), any(), anyInt());
+        }
+
+        @Test
+        @DisplayName("does nothing for an already verified user")
+        void resend_enabledUser_isSilent() {
+            User u = makeUser(1, "alice@example.com", true);
+            when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
+
+            userService.resendRegistrationCode("alice@example.com");
+
+            assertThat(u.getRegistrationCode()).isEqualTo("ABCD1234");
+            verify(userRepository, never()).save(any());
+            verify(mailService, never()).sendRegistrationCode(any(), any(), anyInt());
+        }
+    }
+
+    @Nested
     @DisplayName("validateEmail")
     class ValidateEmail {
 
@@ -268,7 +325,7 @@ class UserServiceTest {
         @DisplayName("returns false when code is expired")
         void validateEmail_expiredCode_returnsFalse() {
             User u = makeUser(1, "alice@example.com", false);
-            u.setRegistrationCodeTimeout(LocalDateTime.now().minusMinutes(1));
+            u.setRegistrationCodeTimeout(Instant.now().minus(1, ChronoUnit.MINUTES));
             when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(u));
 
             boolean result = userService.validateEmail("alice@example.com", "ABCD1234");

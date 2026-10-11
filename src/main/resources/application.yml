@@ -1,9 +1,17 @@
 server:
   port: 8080
 
+management:
+  health:
+    mail:
+      enabled: ${MAIL_ENABLED:false}
+
 spring:
   application:
     name: design-daas-backend
+
+  profiles:
+    default: local
 
   datasource:
     url: ${DB_URL:jdbc:mariadb://localhost:3306/design_backend}
@@ -25,16 +33,19 @@ spring:
     locations: classpath:db/migration
 
   mail:
-    host: ${MAIL_HOST:localhost}
-    port: ${MAIL_PORT:25}
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
-          auth: false
+          auth: true
           starttls:
-            enable: false
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 app:
   admin-initializer:
@@ -58,6 +69,7 @@ app:
     auth-token-requests-per-minute: ${RATE_LIMIT_AUTH_TOKEN:20}
     register-requests-per-minute: ${RATE_LIMIT_REGISTER:5}
     validate-email-requests-per-minute: ${RATE_LIMIT_VALIDATE_EMAIL:10}
+    resend-code-requests-per-minute: ${RATE_LIMIT_RESEND_CODE:3}
     trusted-proxy-ranges: ${RATE_LIMIT_TRUSTED_PROXIES:127.0.0.1/32,::1/128}
   security:
     swagger-public: false

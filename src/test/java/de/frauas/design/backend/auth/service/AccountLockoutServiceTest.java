@@ -12,6 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 
+import static java.time.Clock.systemUTC;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -29,7 +30,7 @@ class AccountLockoutServiceTest {
 
     @BeforeEach
     void setUp() {
-        accountLockoutService = new AccountLockoutService(userRepository);
+        accountLockoutService = new AccountLockoutService(userRepository, systemUTC());
     }
 
     private User user() {

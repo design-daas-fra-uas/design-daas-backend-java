@@ -2,11 +2,11 @@ package de.frauas.design.backend.auth.service;
 
 import de.frauas.design.backend.auth.repository.AccessTokenRepository;
 import de.frauas.design.backend.auth.repository.RefreshTokenRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -25,8 +25,13 @@ class TokenCleanupServiceTest {
     @Mock
     AccessTokenRepository accessTokenRepository;
 
-    @InjectMocks
     TokenCleanupService tokenCleanupService;
+
+    @BeforeEach
+    void setUp() {
+        tokenCleanupService =
+                new TokenCleanupService(refreshTokenRepository, accessTokenRepository, java.time.Clock.systemUTC());
+    }
 
     @Test
     @DisplayName("purges expired refresh and access tokens using the same cutoff instant")

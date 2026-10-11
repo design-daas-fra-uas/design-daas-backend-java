@@ -2,3 +2,9 @@
 /target
 /.idea
 /test-keys/
+
+# Secrets and local key material
+.env
+/keys/
+*.pem
+rsa-jwk.json

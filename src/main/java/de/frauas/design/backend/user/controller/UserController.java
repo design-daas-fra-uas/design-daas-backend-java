@@ -5,12 +5,15 @@ import de.frauas.design.backend.shared.security.Authorities;
 import de.frauas.design.backend.shared.util.LogMasking;
 import de.frauas.design.backend.user.dto.CreateUserRequest;
 import de.frauas.design.backend.user.dto.PatchUserRequest;
+import de.frauas.design.backend.user.dto.ResendCodeRequest;
 import de.frauas.design.backend.user.dto.UserDto;
 import de.frauas.design.backend.user.dto.ValidateEmailRequest;
 import de.frauas.design.backend.user.service.UserService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -41,14 +44,14 @@ public class UserController {
      * {@link #validateEmail} succeeds.
      *
      * @param request the new user's details
-     * @return 200 OK with the created {@link UserDto}
+     * @return 201 Created with no body
      */
     @PostMapping("/user")
-    public ResponseEntity<UserDto> createUser(@Valid @RequestBody CreateUserRequest request) {
+    public ResponseEntity<Void> createUser(@Valid @RequestBody CreateUserRequest request) {
         log.info("POST /user — registering new user email={}", LogMasking.maskEmail(request.getEmail()));
         UserDto result = userService.createUser(request);
         log.info("POST /user — user created id={} email={}", result.getId(), LogMasking.maskEmail(result.getEmail()));
-        return ResponseEntity.ok(result);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     /**
@@ -59,7 +62,7 @@ public class UserController {
      * @return 200 OK if verified, 400 Bad Request if the code is missing/incorrect/expired
      */
     @PostMapping("/user/validate_email")
-    public ResponseEntity<Void> validateEmail(@RequestBody ValidateEmailRequest request) {
+    public ResponseEntity<Void> validateEmail(@Valid @RequestBody ValidateEmailRequest request) {
         log.info("POST /user/validate_email — email={}", LogMasking.maskEmail(request.getEmail()));
         boolean ok = userService.validateEmail(request.getEmail(), request.getRegistrationCode());
         if (ok) {
@@ -72,6 +75,22 @@ public class UserController {
                     LogMasking.maskEmail(request.getEmail()));
         }
         return ok ? ResponseEntity.ok().build() : ResponseEntity.badRequest().build();
+    }
+
+    /**
+     * Sends a new registration code to an account whose e-mail is still unverified.
+     *
+     * <p>Always answers 202 Accepted, whether or not the address belongs to a pending
+     * account, so the endpoint cannot be used to enumerate registered users.</p>
+     *
+     * @param request the e-mail address used at registration
+     * @return 202 Accepted
+     */
+    @PostMapping("/user/resend_code")
+    public ResponseEntity<Void> resendCode(@Valid @RequestBody ResendCodeRequest request) {
+        log.info("POST /user/resend_code — email={}", LogMasking.maskEmail(request.getEmail()));
+        userService.resendRegistrationCode(request.getEmail());
+        return ResponseEntity.accepted().build();
     }
 
     /**
@@ -110,30 +129,30 @@ public class UserController {
      * Re-enables a previously disabled user account (admin-only).
      *
      * @param userId the ID of the user to enable
-     * @return 200 OK with the updated {@link UserDto}
+     * @return 204 No Content
      */
-    @PostMapping("/user/{userId}/enable")
+    @PatchMapping("/user/{userId}/enable")
     @PreAuthorize(Authorities.IS_ADMIN)
-    public ResponseEntity<UserDto> enableUser(@PathVariable Integer userId) {
-        log.info("POST /user/{}/enable — enabling user", userId);
-        UserDto result = userService.enableUser(userId);
-        log.info("POST /user/{}/enable — user enabled", userId);
-        return ResponseEntity.ok(result);
+    public ResponseEntity<Void> enableUser(@PathVariable Integer userId) {
+        log.info("PATCH /user/{}/enable — enabling user", userId);
+        userService.enableUser(userId);
+        log.info("PATCH /user/{}/enable — user enabled", userId);
+        return ResponseEntity.noContent().build();
     }
 
     /**
      * Disables a user account, preventing further logins (admin-only).
      *
      * @param userId the ID of the user to disable
-     * @return 200 OK with the updated {@link UserDto}
+     * @return 204 No Content
      */
-    @PostMapping("/user/{userId}/disable")
+    @PatchMapping("/user/{userId}/disable")
     @PreAuthorize(Authorities.IS_ADMIN)
-    public ResponseEntity<UserDto> disableUser(@PathVariable Integer userId) {
-        log.info("POST /user/{}/disable — disabling user", userId);
-        UserDto result = userService.disableUser(userId);
-        log.info("POST /user/{}/disable — user disabled", userId);
-        return ResponseEntity.ok(result);
+    public ResponseEntity<Void> disableUser(@PathVariable Integer userId) {
+        log.info("PATCH /user/{}/disable — disabling user", userId);
+        userService.disableUser(userId);
+        log.info("PATCH /user/{}/disable — user disabled", userId);
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -148,7 +167,9 @@ public class UserController {
     @PostMapping("/user/request-application/{application}/{isoCode}")
     @PreAuthorize(Authorities.IS_ANY_USER)
     public ResponseEntity<Void> requestApplication(
-            @PathVariable String application, @PathVariable String isoCode, @AuthenticationPrincipal Jwt jwt) {
+            @PathVariable @Pattern(regexp = "[\\w .-]{1,100}", message = "invalid application name") String application,
+            @PathVariable @Pattern(regexp = "[A-Za-z0-9_-]{1,10}", message = "invalid ISO code") String isoCode,
+            @AuthenticationPrincipal Jwt jwt) {
         Integer userId = jwtUserResolver.resolveFromAuthenticatedJwt(jwt);
         log.info("POST /user/request-application/{}/{} — userId={}", application, isoCode, userId);
         userService.requestApplication(userId, application);

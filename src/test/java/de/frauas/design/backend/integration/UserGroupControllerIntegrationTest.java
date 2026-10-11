@@ -16,9 +16,11 @@ import java.util.Map;
 
 import static de.frauas.design.backend.integration.MockJwt.adminJwt;
 import static de.frauas.design.backend.integration.MockJwt.userJwt;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -68,8 +70,8 @@ class UserGroupControllerIntegrationTest extends BaseIntegrationTest {
 
     @Test
     @Order(3)
-    @DisplayName("POST /user_group – admin JWT creates group, returns 200")
-    void createUserGroup_adminJwt_returns200() throws Exception {
+    @DisplayName("POST /user_group – admin JWT creates group, returns 201")
+    void createUserGroup_adminJwt_returns201() throws Exception {
         String body = objectMapper.writeValueAsString(
                 Map.of("name", GROUP_NAME, "description", "Created by integration test"));
 
@@ -77,8 +79,8 @@ class UserGroupControllerIntegrationTest extends BaseIntegrationTest {
                         .with(adminJwt(999))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value(GROUP_NAME));
+                .andExpect(status().isCreated())
+                .andExpect(content().string(""));
     }
 
     @Test
@@ -93,9 +95,9 @@ class UserGroupControllerIntegrationTest extends BaseIntegrationTest {
                         .with(adminJwt(999))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("fallback-desc-group"));
+                .andExpect(status().isCreated());
 
+        assertTrue(userGroupRepository.findByName("fallback-desc-group").isPresent());
         userGroupRepository.findByName("fallback-desc-group").ifPresent(userGroupRepository::delete);
     }
 

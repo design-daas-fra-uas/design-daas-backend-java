@@ -16,7 +16,6 @@ import lombok.Setter;
 import lombok.ToString;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 
 /**
  * Base persistence entity for both regular {@link User}s and {@link Admin}s, mapped
@@ -54,10 +53,10 @@ public abstract class BaseUser {
     private String registrationCode;
 
     @Column(name = "registration_code_timeout")
-    private LocalDateTime registrationCodeTimeout;
+    private Instant registrationCodeTimeout;
 
     @Column(name = "registration_used_moment")
-    private LocalDateTime registrationUsedMoment;
+    private Instant registrationUsedMoment;
 
     /** consecutive failed password attempts since last successful login. */
     @Column(name = "failed_login_attempts", nullable = false)

@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 
@@ -33,13 +34,14 @@ public class AccountLockoutService {
     private static final Duration LOCKOUT_DURATION = Duration.ofMinutes(15);
 
     private final UserRepository userRepository;
+    private final Clock clock;
 
     /**
      * Throws {@link AccountLockedException} if {@code user} is currently within
      * its lockout window.
      */
     public void assertNotLocked(BaseUser user) {
-        if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(Instant.now())) {
+        if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(Instant.now(clock))) {
             log.warn(
                     "assertNotLocked — login attempt on locked account user={}", LogMasking.maskEmail(user.getEmail()));
             throw new AccountLockedException();
@@ -60,7 +62,7 @@ public class AccountLockoutService {
         int attempts = user.getFailedLoginAttempts() + 1;
         user.setFailedLoginAttempts(attempts);
         if (attempts >= MAX_FAILED_ATTEMPTS) {
-            user.setLockedUntil(Instant.now().plus(LOCKOUT_DURATION));
+            user.setLockedUntil(Instant.now(clock).plus(LOCKOUT_DURATION));
             log.warn(
                     "recordFailedAttempt — account locked after {} failed attempts user={}",
                     attempts,

@@ -45,6 +45,12 @@ public class RateLimitingProperties {
     private int validateEmailRequestsPerMinute = 10;
 
     /**
+     * Maximum number of resend-registration-code requests per minute per IP.
+     */
+    @Min(1)
+    private int resendCodeRequestsPerMinute = 3;
+
+    /**
      * CIDR ranges of trusted reverse proxies.
      *
      * <p>{@code X-Forwarded-For} must only be trusted when the request

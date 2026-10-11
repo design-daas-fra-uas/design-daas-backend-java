@@ -10,9 +10,11 @@ import org.springframework.mail.MailException;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
+import org.thymeleaf.exceptions.TemplateEngineException;
 
 import java.nio.charset.StandardCharsets;
 
@@ -21,8 +23,11 @@ import java.nio.charset.StandardCharsets;
  * their bodies from the HTML templates under {@code templates/mail/} via Thymeleaf.
  *
  * <p>Set {@code MAIL_ENABLED=true} and the MAIL_* env vars to activate.
- * When disabled, the recipient and template variables are logged at INFO level instead,
- * so manual testing remains possible without an SMTP server.</p>
+ * When disabled, nothing is sent: the (masked) recipient is logged at INFO and, for local
+ * testing without an SMTP server, the registration code at DEBUG level only.</p>
+ *
+ * <p>Methods run on the bounded executor from {@code AsyncConfig}; failures are logged there
+ * (and here) because an {@code @Async void} method has no caller to report them to.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -50,12 +55,15 @@ public class MailService {
      * @param registrationCode the one-time code to embed in the email
      * @param expiresInHours how many hours the code remains valid, shown to the recipient
      */
+    @Async
     public void sendRegistrationCode(String toEmail, String registrationCode, int expiresInHours) {
         if (!mailEnabled) {
             log.info(
                     "Mail disabled — skipping registration email to {} (expiresInHours={})",
                     LogMasking.maskEmail(toEmail),
                     expiresInHours);
+            log.debug(
+                    "Mail disabled — registration code for {} is {}", LogMasking.maskEmail(toEmail), registrationCode);
             return;
         }
         Context context = new Context();
@@ -74,6 +82,7 @@ public class MailService {
      * @param userId      the requesting user's ID (as string)
      * @param application the application name being requested
      */
+    @Async
     public void sendApplicationRequestEmail(String userEmail, String userName, String userId, String application) {
         if (!mailEnabled) {
             log.info(
@@ -136,7 +145,7 @@ public class MailService {
             }
             helper.setSubject(subject);
             helper.setText(templateEngine.process(templateName, context), true);
-        } catch (MessagingException e) {
+        } catch (MessagingException | TemplateEngineException e) {
             log.error(
                     "sendReplyTo — failed to build template={} to={} replyTo={}",
                     templateName,

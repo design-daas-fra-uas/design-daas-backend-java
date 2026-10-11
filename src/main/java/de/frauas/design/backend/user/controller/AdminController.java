@@ -8,6 +8,7 @@ import de.frauas.design.backend.user.service.AdminService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,13 +47,13 @@ public class AdminController {
      * Creates a new admin account.
      *
      * @param request the new admin's details
-     * @return 200 OK with the created {@link AdminDto}
+     * @return 201 Created with no body
      */
     @PostMapping("/admin")
-    public ResponseEntity<AdminDto> createAdmin(@Valid @RequestBody CreateAdminRequest request) {
+    public ResponseEntity<Void> createAdmin(@Valid @RequestBody CreateAdminRequest request) {
         log.info("POST /admin — creating admin email={}", LogMasking.maskEmail(request.getEmail()));
         AdminDto result = adminService.createAdmin(request);
         log.info("POST /admin — admin created id={} email={}", result.getId(), LogMasking.maskEmail(result.getEmail()));
-        return ResponseEntity.ok(result);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 }

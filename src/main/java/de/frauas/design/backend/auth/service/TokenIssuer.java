@@ -16,6 +16,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Component;
 
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
@@ -43,6 +44,7 @@ public class TokenIssuer {
     private final JwtEncoder jwtEncoder;
     private final RefreshTokenRepository refreshTokenRepository;
     private final AccessTokenRepository accessTokenRepository;
+    private final Clock clock;
 
     /**
      * The {@code iss} claim to embed in every issued access token.
@@ -72,12 +74,14 @@ public class TokenIssuer {
             JwtEncoder jwtEncoder,
             RefreshTokenRepository refreshTokenRepository,
             AccessTokenRepository accessTokenRepository,
+            Clock clock,
             @Value("${app.oauth2.issuer:http://localhost:8080}") String issuer,
             @Value("${app.oauth2.access-token-ttl-seconds:3600}") long accessTokenTtlSeconds,
             @Value("${app.oauth2.refresh-token-ttl-days:30}") long refreshTokenTtlDays) {
         this.jwtEncoder = jwtEncoder;
         this.refreshTokenRepository = refreshTokenRepository;
         this.accessTokenRepository = accessTokenRepository;
+        this.clock = clock;
         this.issuer = issuer;
         this.accessTokenTtlSeconds = accessTokenTtlSeconds;
         this.refreshTokenTtlDays = refreshTokenTtlDays;
@@ -88,7 +92,7 @@ public class TokenIssuer {
      * {@code access_tokens} table, and returns the compact token string.
      */
     public String issueAccessToken(BaseUser user, String scope) {
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         String jti = UUID.randomUUID().toString();
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -128,7 +132,7 @@ public class TokenIssuer {
         SECURE_RANDOM.nextBytes(bytes);
         String tokenValue = HexFormat.of().formatHex(bytes);
 
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         RefreshTokenEntity rt = new RefreshTokenEntity();
         rt.setTokenValue(tokenValue);
         rt.setUserId(user.getId());

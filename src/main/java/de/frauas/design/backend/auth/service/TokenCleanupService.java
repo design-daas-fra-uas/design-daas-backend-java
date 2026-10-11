@@ -8,6 +8,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 
 /**
@@ -27,6 +28,7 @@ public class TokenCleanupService {
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final AccessTokenRepository accessTokenRepository;
+    private final Clock clock;
 
     /**
      * Deletes all refresh tokens and access tokens whose {@code expiresAt}
@@ -38,7 +40,7 @@ public class TokenCleanupService {
     @Scheduled(cron = "${app.token.cleanup.cron:0 0 3 * * *}")
     @Transactional
     public void purgeExpiredTokens() {
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         int deletedRefreshTokens = refreshTokenRepository.deleteExpired(now);
         int deletedAccessTokens = accessTokenRepository.deleteExpired(now);
         log.info(

@@ -8,6 +8,7 @@ import de.frauas.design.backend.shared.security.Authorities;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,22 +50,20 @@ public class DesktopController {
 
     /**
      * Creates a new desktop, optionally cascade-creating desktop subgroups for it.
-     * Business rules (e.g. {@code name} falling back to {@code description} when blank)
-     * are enforced by {@link DesktopService#createDesktop}, not here.
+     * Business rules (e.g. each subgroup being named after its description) are enforced
+     * by {@link DesktopService#createDesktop}, not here.
      *
      * @param request the desktop to create
-     * @return 200 OK with the created {@link DesktopDto}
+     * @return 201 Created with no body
      */
     @PostMapping("/desktop")
-    public ResponseEntity<DesktopDto> createDesktop(@Valid @RequestBody DesktopCreateRequest request) {
+    public ResponseEntity<Void> createDesktop(@Valid @RequestBody DesktopCreateRequest request) {
 
-        log.info("POST /desktop — creating desktop name={}", request.getName());
+        log.info("POST /desktop — creating desktop description={}", request.getDescription());
 
-        DesktopDto result = desktopService.createDesktop(request);
+        desktopService.createDesktop(request);
 
-        log.info("POST /desktop — desktop created id={} name={}", result.getId(), result.getName());
-
-        return ResponseEntity.ok(result);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     /**

@@ -16,9 +16,12 @@ import java.util.Map;
 
 import static de.frauas.design.backend.integration.MockJwt.adminJwt;
 import static de.frauas.design.backend.integration.MockJwt.userJwt;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -47,18 +50,19 @@ class UserControllerIntegrationTest extends BaseIntegrationTest {
 
     @Test
     @Order(1)
-    @DisplayName("POST /user – creates user with valid payload returns 200")
-    void createUser_validPayload_returns200() throws Exception {
+    @DisplayName("POST /user – creates user with valid payload returns 201")
+    void createUser_validPayload_returns201() throws Exception {
         String body = objectMapper.writeValueAsString(Map.of(
                 "name", "Ctrl User",
                 "email", TEST_EMAIL,
                 "password", "Password1"));
 
         mockMvc.perform(post("/user").contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value(TEST_EMAIL))
-                .andExpect(jsonPath("$.enabled").value(false))
-                .andExpect(jsonPath("$.role").value("user"));
+                .andExpect(status().isCreated())
+                .andExpect(content().string(""));
+
+        User created = (User) userRepository.findByEmail(TEST_EMAIL).orElseThrow();
+        assertFalse(created.isEnabled());
     }
 
     @Test
@@ -209,7 +213,7 @@ class UserControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     // -------------------------------------------------------------------------
-    // POST /user/{userId}/enable  &  /disable – admin only
+    // PATCH /user/{userId}/enable  &  /disable – admin only
     // -------------------------------------------------------------------------
 
     @Test
@@ -228,17 +232,17 @@ class UserControllerIntegrationTest extends BaseIntegrationTest {
 
     @Test
     @Order(14)
-    @DisplayName("POST /user/{id}/disable then /enable toggles enabled state")
+    @DisplayName("PATCH /user/{id}/disable then /enable toggles enabled state")
     void enableDisable_togglesState() throws Exception {
         User u = (User) userRepository.findByEmail(TEST_EMAIL).orElseThrow();
         Integer id = u.getId();
 
-        mockMvc.perform(post("/user/" + id + "/disable").with(adminJwt(999)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.enabled").value(false));
+        mockMvc.perform(patch("/user/" + id + "/disable").with(adminJwt(999)))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+        assertFalse(userRepository.findById(id).orElseThrow().isEnabled());
 
-        mockMvc.perform(post("/user/" + id + "/enable").with(adminJwt(999)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.enabled").value(true));
+        mockMvc.perform(patch("/user/" + id + "/enable").with(adminJwt(999))).andExpect(status().isNoContent());
+        assertTrue(userRepository.findById(id).orElseThrow().isEnabled());
     }
 }
