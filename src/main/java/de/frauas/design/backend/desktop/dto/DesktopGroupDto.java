@@ -19,9 +19,6 @@ public class DesktopGroupDto {
     private Integer id;
 
     @Size(max = 255)
-    private String name;
-
-    @Size(max = 255)
     private String description;
 
     private List<Integer> desktopIds;
@@ -30,7 +27,6 @@ public class DesktopGroupDto {
     public static DesktopGroupDto from(DesktopGroup g) {
         return DesktopGroupDto.builder()
                 .id(g.getId())
-                .name(g.getName())
                 .description(g.getDescription())
                 .desktopIds(g.getDesktops().stream().map(Desktop::getId).toList())
                 .build();
