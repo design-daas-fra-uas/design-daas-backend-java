@@ -10,6 +10,9 @@ spring:
   application:
     name: design-daas-backend
 
+  profiles:
+    default: local
+
   datasource:
     url: ${DB_URL:jdbc:mariadb://localhost:3306/design_backend}
     username: ${DB_USERNAME:design}
