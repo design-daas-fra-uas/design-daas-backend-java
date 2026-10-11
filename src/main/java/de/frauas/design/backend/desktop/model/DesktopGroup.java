@@ -38,9 +38,6 @@ public class DesktopGroup {
     private Integer id;
 
     @Column(nullable = false, unique = true)
-    private String name;
-
-    @Column
     private String description;
 
     @ManyToMany(fetch = FetchType.LAZY)
