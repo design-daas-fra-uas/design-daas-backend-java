@@ -51,9 +51,9 @@ public class ArchitectureTest {
             .whereLayer("Services")
             .mayOnlyBeAccessedByLayers("Controllers", "Config", "Services", "Bootstrap")
             .whereLayer("Repositories")
-            .mayOnlyBeAccessedByLayers("Services", "Config", "Controllers", "Bootstrap")
+            .mayOnlyBeAccessedByLayers("Services", "Config", "Bootstrap")
             .whereLayer("Models")
-            .mayOnlyBeAccessedByLayers("Controllers", "Services", "Repositories", "Config", "DTOs", "Bootstrap");
+            .mayOnlyBeAccessedByLayers("Services", "Repositories", "Config", "DTOs", "Bootstrap");
 
     // -------------------------------------------------------------------------
     // Naming Conventions
@@ -168,6 +168,37 @@ public class ArchitectureTest {
             .dependOnClassesThat()
             .resideInAPackage("..repository..")
             .because("DTOs must not depend on repositories");
+
+    @ArchTest
+    static final ArchRule dtosMustNotDependOnServicesOrControllers = noClasses()
+            .that()
+            .resideInAPackage("..dto..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAnyPackage("..service..", "..controller..")
+            .because("DTOs are plain data carriers and must not know the layers that use them");
+
+    @ArchTest
+    static final ArchRule servicesMustNotDependOnControllers = noClasses()
+            .that()
+            .resideInAPackage("..service..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("..controller..")
+            .because("Dependencies point downwards: controllers call services, never the reverse");
+
+    @ArchTest
+    static final ArchRule sharedMustNotDependOnFeatureModules = noClasses()
+            .that()
+            .resideInAPackage("de.frauas.design.backend.shared..")
+            .should()
+            .dependOnClassesThat()
+            .resideInAnyPackage(
+                    "de.frauas.design.backend.auth..",
+                    "de.frauas.design.backend.user..",
+                    "de.frauas.design.backend.desktop..",
+                    "de.frauas.design.backend.permission..")
+            .because("shared code is a leaf: feature modules depend on it, not the other way round");
 
     // -------------------------------------------------------------------------
     // Transactional Annotation Rules
