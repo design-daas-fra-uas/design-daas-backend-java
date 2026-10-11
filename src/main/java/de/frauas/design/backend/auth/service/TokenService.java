@@ -10,6 +10,7 @@ import de.frauas.design.backend.auth.exception.InvalidCredentialsException;
 import de.frauas.design.backend.auth.exception.InvalidRefreshTokenException;
 import de.frauas.design.backend.auth.exception.InvalidRequestException;
 import de.frauas.design.backend.auth.exception.RefreshTokenUserInvalidException;
+import de.frauas.design.backend.auth.exception.TokenGrantException;
 import de.frauas.design.backend.auth.model.RefreshTokenEntity;
 import de.frauas.design.backend.auth.repository.RefreshTokenRepository;
 import de.frauas.design.backend.shared.util.LogMasking;
@@ -35,8 +36,7 @@ import java.time.Instant;
  * token and refresh token. The old refresh token is revoked so it can't be reused
  * (token rotation).</p>
  *
- * <p>Logout: revokes the caller's access token and, if given, their refresh token,
- * so both stop working right away instead of waiting for them to expire.</p>
+ * <p>Logout and bulk revocation live in {@link TokenRevocationService}.</p>
  *
  * <p>The actual lockout rules, scope rules, and token creation live in
  * {@link AccountLockoutService}, {@link ScopeResolver}, and {@link TokenIssuer} —
@@ -82,7 +82,7 @@ public class TokenService {
      *                {@link GrantRequest#of}
      * @return the newly issued access/refresh token pair
      */
-    @Transactional
+    @Transactional(noRollbackFor = TokenGrantException.class)
     public TokenResponseDto grantToken(GrantRequest request) {
         return switch (request) {
             case PasswordGrantRequest r -> passwordGrant(r.username(), r.password(), r.scope());
@@ -99,7 +99,7 @@ public class TokenService {
      * account lockout and timing-attack mitigation, validates the
      * requested scope, and issues a new access/refresh token pair.
      */
-    @Transactional
+    @Transactional(noRollbackFor = TokenGrantException.class)
     public TokenResponseDto passwordGrant(String username, String password, String scope) {
         log.debug("passwordGrant — username={}", LogMasking.maskEmail(username));
         if (username == null || username.isBlank() || password == null || password.isBlank()) {
@@ -157,7 +157,7 @@ public class TokenService {
      * Handles the refresh-token grant: validates and rotates the refresh token,
      * re-validates the underlying user, and issues a new access/refresh token pair.
      */
-    @Transactional
+    @Transactional(noRollbackFor = TokenGrantException.class)
     public TokenResponseDto refreshGrant(String refreshToken) {
         log.debug("refreshGrant — token=[REDACTED]");
         if (refreshToken == null || refreshToken.isBlank()) {
