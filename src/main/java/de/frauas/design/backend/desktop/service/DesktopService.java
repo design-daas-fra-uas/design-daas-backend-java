@@ -67,22 +67,19 @@ public class DesktopService {
     /**
      * Creates a new desktop, optionally cascade-creating desktop subgroups for it.
      *
-     * <p>Each subgroup is named after its description.</p>
-     *
      * @param request the desktop to create, plus any subgroups to create alongside it
-     * @return the created desktop
-     * @throws DesktopGroupAlreadyExistsException if a subgroup name is already taken
+     * @throws DesktopGroupAlreadyExistsException if a subgroup description is already taken
      */
     @Transactional
-    public DesktopDto createDesktop(DesktopCreateRequest request) {
+    public void createDesktop(DesktopCreateRequest request) {
         log.debug("createDesktop(DesktopCreateRequest) — description={}", request.getDescription());
 
-        Set<String> subGroupNames = new HashSet<>();
+        Set<String> subGroupDescriptions = new HashSet<>();
         if (request.getGroups() != null) {
             for (DesktopCreateRequest.SubGroupRequest sgReq : request.getGroups()) {
-                String name = sgReq.getDescription();
-                if (!subGroupNames.add(name) || desktopGroupRepository.existsByName(name)) {
-                    throw new DesktopGroupAlreadyExistsException(name);
+                String description = sgReq.getDescription();
+                if (!subGroupDescriptions.add(description) || desktopGroupRepository.existsByDescription(description)) {
+                    throw new DesktopGroupAlreadyExistsException(description);
                 }
             }
         }
@@ -93,13 +90,12 @@ public class DesktopService {
         if (request.getGroups() != null) {
             for (DesktopCreateRequest.SubGroupRequest sgReq : request.getGroups()) {
                 DesktopGroup g = new DesktopGroup();
-                g.setName(sgReq.getDescription());
                 g.setDescription(sgReq.getDescription());
                 linkDesktopAndGroup(savedDesktop, g);
                 desktopGroupRepository.save(g);
                 log.debug(
-                        "createDesktop — created sub-group name={} for desktopId={}",
-                        g.getName(),
+                        "createDesktop — created sub-group description={} for desktopId={}",
+                        g.getDescription(),
                         savedDesktop.getId());
             }
         }
@@ -107,7 +103,6 @@ public class DesktopService {
                 "createDesktop — desktop created id={} groups={}",
                 savedDesktop.getId(),
                 request.getGroups() != null ? request.getGroups().size() : 0);
-        return DesktopDto.from(savedDesktop);
     }
 
     // ---- DesktopGroups ----
@@ -126,26 +121,22 @@ public class DesktopService {
     }
 
     /**
-     * Creates a new desktop group. {@code name} falls back to {@code description} when blank.
+     * Creates a new desktop group.
      *
      * @param request the group data
-     * @return the created group
-     * @throws DesktopGroupAlreadyExistsException if a group with the resulting name exists
+     * @throws DesktopGroupAlreadyExistsException if a group with the same description exists
      */
     @Transactional
-    public DesktopGroupDto createDesktopGroup(DesktopGroupCreateRequest request) {
-        log.debug("createDesktopGroup — name={}", request.getName());
-        String name = resolveName(request.getName(), request.getDescription());
-        if (desktopGroupRepository.existsByName(name)) {
-            log.warn("createDesktopGroup — name={} already exists", name);
-            throw new DesktopGroupAlreadyExistsException(name);
+    public void createDesktopGroup(DesktopGroupCreateRequest request) {
+        log.debug("createDesktopGroup — description={}", request.getDescription());
+        if (desktopGroupRepository.existsByDescription(request.getDescription())) {
+            log.warn("createDesktopGroup — description={} already exists", request.getDescription());
+            throw new DesktopGroupAlreadyExistsException(request.getDescription());
         }
         DesktopGroup g = new DesktopGroup();
-        g.setName(name);
         g.setDescription(request.getDescription());
         DesktopGroup savedGroup = desktopGroupRepository.save(g);
-        log.info("createDesktopGroup — created id={} name={}", savedGroup.getId(), savedGroup.getName());
-        return DesktopGroupDto.from(savedGroup);
+        log.info("createDesktopGroup — created id={}", savedGroup.getId());
     }
 
     /**
@@ -154,14 +145,13 @@ public class DesktopService {
      *
      * @param desktopGroupId the ID of the desktop group to associate
      * @param userGroupId the ID of the user group to associate
-     * @return the desktop group's user groups after the association is added
      * @throws DesktopGroupNotFoundException if no desktop group exists with the given id
      * @throws UserGroupNotFoundException if no user group exists with the given id
      * @throws UserGroupAlreadyAssociatedException if the user group is already associated
      *     with the desktop group
      */
     @Transactional
-    public List<UserGroupDto> addUserGroupToDesktopGroup(Integer desktopGroupId, Integer userGroupId) {
+    public void addUserGroupToDesktopGroup(Integer desktopGroupId, Integer userGroupId) {
         log.debug("addUserGroupToDesktopGroup — desktopGroupId={} userGroupId={}", desktopGroupId, userGroupId);
         DesktopGroup dg = findDesktopGroupById(desktopGroupId);
         UserGroup ug = findUserGroupById(userGroupId);
@@ -178,12 +168,6 @@ public class DesktopService {
                 "addUserGroupToDesktopGroup — desktopGroupId={} userGroupId={} association created",
                 desktopGroupId,
                 userGroupId);
-        return dg.getUserGroups().stream().map(UserGroupDto::from).toList();
-    }
-
-    /** Returns {@code name} if non-blank, otherwise {@code description} (validated non-blank upstream). */
-    private String resolveName(String name, String description) {
-        return name != null && !name.isBlank() ? name : description;
     }
 
     private Desktop findDesktopById(Integer id) {

@@ -38,23 +38,30 @@ class DesktopControllerIntegrationTest extends BaseIntegrationTest {
 
     @Test
     @Order(2)
-    @DisplayName("POST /desktop – creates desktop with admin JWT and returns Location")
+    @DisplayName("POST /desktop – creates desktop with admin JWT")
     void createDesktop_adminJwt_returns201() throws Exception {
         String body = objectMapper.writeValueAsString(Map.of(
                 "description", "Integration Test Desktop"));
 
-        String location = mockMvc.perform(post("/desktop")
+        mockMvc.perform(post("/desktop")
                         .with(adminJwt(999))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated())
-                .andExpect(content().string(""))
+                .andExpect(content().string(""));
+
+        String response = mockMvc.perform(get("/desktops").with(adminJwt(999)))
+                .andExpect(status().isOk())
                 .andReturn()
                 .getResponse()
-                .getHeader("Location");
+                .getContentAsString();
 
-        assertNotNull(location);
-        createdDesktopId = Integer.valueOf(location.substring(location.lastIndexOf('/') + 1));
+        for (var desktop : objectMapper.readTree(response)) {
+            if ("Integration Test Desktop".equals(desktop.get("description").asText())) {
+                createdDesktopId = desktop.get("id").asInt();
+            }
+        }
+        assertNotNull(createdDesktopId);
     }
 
     @Test

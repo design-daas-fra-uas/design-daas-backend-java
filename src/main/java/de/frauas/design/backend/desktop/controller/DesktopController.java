@@ -54,18 +54,16 @@ public class DesktopController {
      * by {@link DesktopService#createDesktop}, not here.
      *
      * @param request the desktop to create
-     * @return 201 Created with the created {@link DesktopDto}
+     * @return 201 Created with no body
      */
     @PostMapping("/desktop")
-    public ResponseEntity<DesktopDto> createDesktop(@Valid @RequestBody DesktopCreateRequest request) {
+    public ResponseEntity<Void> createDesktop(@Valid @RequestBody DesktopCreateRequest request) {
 
         log.info("POST /desktop — creating desktop description={}", request.getDescription());
 
-        DesktopDto result = desktopService.createDesktop(request);
+        desktopService.createDesktop(request);
 
-        log.info("POST /desktop — desktop created id={}", result.getId());
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(result);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     /**

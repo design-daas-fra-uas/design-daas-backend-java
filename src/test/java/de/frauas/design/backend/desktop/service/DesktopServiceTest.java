@@ -102,11 +102,10 @@ class DesktopServiceTest {
                 return group;
             });
 
-            Integer id = desktopService.createDesktop(request);
+            desktopService.createDesktop(request);
 
             ArgumentCaptor<DesktopGroup> captor = ArgumentCaptor.forClass(DesktopGroup.class);
             verify(desktopGroupRepository).save(captor.capture());
-            assertThat(id).isEqualTo(10);
             assertThat(captor.getValue().getDescription()).isEqualTo("Sub Group");
             assertThat(captor.getValue().getDesktops()).extracting(Desktop::getId).containsExactly(10);
         }
