@@ -22,6 +22,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 
 /**
@@ -63,6 +64,7 @@ public class TokenService {
     private final AccountLockoutService accountLockoutService;
     private final ScopeResolver scopeResolver;
     private final TokenIssuer tokenIssuer;
+    private final Clock clock;
 
     // -------------------------------------------------------------------------
     // Grant dispatch
@@ -173,7 +175,7 @@ public class TokenService {
         }
 
         RefreshTokenEntity refreshTokenEntity = refreshTokenOpt.get();
-        if (refreshTokenEntity.getExpiresAt().isBefore(Instant.now())) {
+        if (refreshTokenEntity.getExpiresAt().isBefore(Instant.now(clock))) {
             refreshTokenRepository.delete(refreshTokenEntity);
             log.warn("refreshGrant — expired refresh token userId={}", refreshTokenEntity.getUserId());
             throw new ExpiredRefreshTokenException();

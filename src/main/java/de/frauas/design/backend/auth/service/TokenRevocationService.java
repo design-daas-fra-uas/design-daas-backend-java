@@ -9,6 +9,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 
 /**
@@ -25,6 +26,7 @@ public class TokenRevocationService {
 
     private final AccessTokenRepository accessTokenRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final Clock clock;
 
     /**
      * Revokes the caller's current access token and, if supplied, their refresh token.
@@ -62,7 +64,7 @@ public class TokenRevocationService {
      */
     @Transactional
     public void revokeAllForUser(Integer userId) {
-        Instant now = Instant.now();
+        Instant now = Instant.now(clock);
         int access = accessTokenRepository.revokeAllByUserId(userId, now);
         int refresh = refreshTokenRepository.revokeAllByUserId(userId, now);
         log.info("revokeAllForUser — userId={} accessTokens={} refreshTokens={}", userId, access, refresh);
