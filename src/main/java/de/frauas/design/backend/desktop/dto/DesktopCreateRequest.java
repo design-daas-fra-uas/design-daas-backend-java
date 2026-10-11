@@ -2,6 +2,7 @@ package de.frauas.design.backend.desktop.dto;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.util.List;
@@ -15,10 +16,12 @@ import java.util.List;
 public class DesktopCreateRequest {
 
     /** Optional — falls back to description when not provided. */
+    @Size(max = 255)
     private String name;
 
     /** Required */
     @NotBlank
+    @Size(max = 255)
     private String description;
 
     /** Optional — cascade-create desktop subgroups on creation. */
@@ -27,9 +30,11 @@ public class DesktopCreateRequest {
     /** A desktop subgroup to be created alongside the parent desktop. */
     @Data
     public static class SubGroupRequest {
+        @Size(max = 255)
         private String name;
 
         @NotBlank
+        @Size(max = 255)
         private String description;
     }
 }

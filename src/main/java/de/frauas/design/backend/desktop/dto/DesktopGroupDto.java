@@ -2,6 +2,7 @@ package de.frauas.design.backend.desktop.dto;
 
 import de.frauas.design.backend.desktop.model.Desktop;
 import de.frauas.design.backend.desktop.model.DesktopGroup;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -23,7 +24,10 @@ import java.util.List;
 @AllArgsConstructor
 public class DesktopGroupDto {
     private Integer id;
+    @Size(max = 255)
     private String name;
+
+    @Size(max = 255)
     private String description;
     private List<Integer> desktopIds;
 
