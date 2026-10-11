@@ -1,0 +1,25 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to deploy (e.g. sha-<commit>)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  trigger-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.INFRA_DISPATCH_TOKEN }}
+          repository: ${{ github.repository_owner }}/design-daas-infra
+          event-type: deploy
+          client-payload: '{"service": "backend", "tag": "${{ inputs.tag }}"}'
