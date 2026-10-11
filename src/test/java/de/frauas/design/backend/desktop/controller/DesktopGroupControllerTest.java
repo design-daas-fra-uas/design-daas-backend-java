@@ -1,7 +1,8 @@
 package de.frauas.design.backend.desktop.controller;
 
+import de.frauas.design.backend.desktop.dto.DesktopGroupCreateRequest;
 import de.frauas.design.backend.desktop.dto.DesktopGroupDto;
-import de.frauas.design.backend.desktop.exception.DesktopGroupNameRequiredException;
+import de.frauas.design.backend.desktop.exception.DesktopGroupAlreadyExistsException;
 import de.frauas.design.backend.desktop.exception.DesktopGroupNotFoundException;
 import de.frauas.design.backend.desktop.service.DesktopService;
 import de.frauas.design.backend.user.dto.UserGroupDto;
@@ -42,10 +43,11 @@ class DesktopGroupControllerTest {
     }
 
     @Test
-    @DisplayName("createDesktopGroup returns 200 with the created group")
-    void createDesktopGroup_returnsOk() {
-        DesktopGroupDto request =
-                DesktopGroupDto.builder().name("DG1").description("Group 1").build();
+    @DisplayName("createDesktopGroup returns 201 with the created group")
+    void createDesktopGroup_returnsCreated() {
+        DesktopGroupCreateRequest request = new DesktopGroupCreateRequest();
+        request.setName("DG1");
+        request.setDescription("Group 1");
         DesktopGroupDto responseBody = DesktopGroupDto.builder()
                 .id(5)
                 .name("DG1")
@@ -55,30 +57,30 @@ class DesktopGroupControllerTest {
 
         var response = desktopGroupController.createDesktopGroup(request);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isEqualTo(responseBody);
     }
 
     @Test
-    @DisplayName("createDesktopGroup propagates validation failures from the service")
-    void createDesktopGroup_invalidRequest_propagatesException() {
-        DesktopGroupDto request =
-                DesktopGroupDto.builder().name(" ").description(" ").build();
-        when(desktopService.createDesktopGroup(request)).thenThrow(new DesktopGroupNameRequiredException());
+    @DisplayName("createDesktopGroup propagates conflicts from the service")
+    void createDesktopGroup_duplicate_propagatesException() {
+        DesktopGroupCreateRequest request = new DesktopGroupCreateRequest();
+        request.setDescription("Group 1");
+        when(desktopService.createDesktopGroup(request)).thenThrow(new DesktopGroupAlreadyExistsException("Group 1"));
 
         assertThatThrownBy(() -> desktopGroupController.createDesktopGroup(request))
-                .isInstanceOf(DesktopGroupNameRequiredException.class);
+                .isInstanceOf(DesktopGroupAlreadyExistsException.class);
     }
 
     @Test
-    @DisplayName("addUserGroup returns 200 with the updated user groups")
-    void addUserGroup_returnsOk() {
+    @DisplayName("addUserGroup returns 201 with the updated user groups")
+    void addUserGroup_returnsCreated() {
         UserGroupDto userGroup = UserGroupDto.builder().id(2).name("UG1").build();
         when(desktopService.addUserGroupToDesktopGroup(1, 2)).thenReturn(List.of(userGroup));
 
         var response = desktopGroupController.addUserGroup(1, 2);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).containsExactly(userGroup);
     }
 

@@ -2,8 +2,9 @@ package de.frauas.design.backend.desktop.service;
 
 import de.frauas.design.backend.desktop.dto.DesktopCreateRequest;
 import de.frauas.design.backend.desktop.dto.DesktopDto;
+import de.frauas.design.backend.desktop.dto.DesktopGroupCreateRequest;
 import de.frauas.design.backend.desktop.dto.DesktopGroupDto;
-import de.frauas.design.backend.desktop.exception.DesktopGroupNameRequiredException;
+import de.frauas.design.backend.desktop.exception.DesktopGroupAlreadyExistsException;
 import de.frauas.design.backend.desktop.exception.DesktopGroupNotFoundException;
 import de.frauas.design.backend.desktop.exception.DesktopNotFoundException;
 import de.frauas.design.backend.desktop.exception.UserGroupAlreadyAssociatedException;
@@ -20,7 +21,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Core business logic for desktop and desktop-group management, including user-group
@@ -64,25 +67,33 @@ public class DesktopService {
     /**
      * Creates a new desktop, optionally cascade-creating desktop subgroups for it.
      *
-     * <p>If a subgroup has no name, its description is used as the name instead — at
-     * least one of the two must be present, enforced via {@link
-     * DesktopCreateRequest.SubGroupRequest#getDescription()} being {@code @NotBlank}.</p>
+     * <p>Each subgroup is named after its description.</p>
      *
      * @param request the desktop to create, plus any subgroups to create alongside it
      * @return the created desktop
+     * @throws DesktopGroupAlreadyExistsException if a subgroup name is already taken
      */
     @Transactional
     public DesktopDto createDesktop(DesktopCreateRequest request) {
-        log.debug("createDesktop(DesktopCreateRequest) — name={}", request.getName());
+        log.debug("createDesktop(DesktopCreateRequest) — description={}", request.getDescription());
+
+        Set<String> subGroupNames = new HashSet<>();
+        if (request.getGroups() != null) {
+            for (DesktopCreateRequest.SubGroupRequest sgReq : request.getGroups()) {
+                String name = sgReq.getDescription();
+                if (!subGroupNames.add(name) || desktopGroupRepository.existsByName(name)) {
+                    throw new DesktopGroupAlreadyExistsException(name);
+                }
+            }
+        }
 
         Desktop desktop = new Desktop();
-        desktop.setName(resolveName(request.getName(), request.getDescription()));
         desktop.setDescription(request.getDescription());
         Desktop savedDesktop = desktopRepository.save(desktop);
         if (request.getGroups() != null) {
             for (DesktopCreateRequest.SubGroupRequest sgReq : request.getGroups()) {
                 DesktopGroup g = new DesktopGroup();
-                g.setName(resolveName(sgReq.getName(), sgReq.getDescription()));
+                g.setName(sgReq.getDescription());
                 g.setDescription(sgReq.getDescription());
                 linkDesktopAndGroup(savedDesktop, g);
                 desktopGroupRepository.save(g);
@@ -93,9 +104,8 @@ public class DesktopService {
             }
         }
         log.info(
-                "createDesktop — desktop created id={} name={} groups={}",
+                "createDesktop — desktop created id={} groups={}",
                 savedDesktop.getId(),
-                savedDesktop.getName(),
                 request.getGroups() != null ? request.getGroups().size() : 0);
         return DesktopDto.from(savedDesktop);
     }
@@ -116,21 +126,22 @@ public class DesktopService {
     }
 
     /**
-     * Creates a new desktop group.
+     * Creates a new desktop group. {@code name} falls back to {@code description} when blank.
      *
-     * <p>If no name is given, the description is used as the name instead — at least one
-     * of the two must be present.</p>
-     *
-     * @param request the group data; {@code name} falls back to {@code description} when blank
+     * @param request the group data
      * @return the created group
-     * @throws DesktopGroupNameRequiredException if both {@code name} and {@code description}
-     *     are blank
+     * @throws DesktopGroupAlreadyExistsException if a group with the resulting name exists
      */
     @Transactional
-    public DesktopGroupDto createDesktopGroup(DesktopGroupDto request) {
+    public DesktopGroupDto createDesktopGroup(DesktopGroupCreateRequest request) {
         log.debug("createDesktopGroup — name={}", request.getName());
+        String name = resolveName(request.getName(), request.getDescription());
+        if (desktopGroupRepository.existsByName(name)) {
+            log.warn("createDesktopGroup — name={} already exists", name);
+            throw new DesktopGroupAlreadyExistsException(name);
+        }
         DesktopGroup g = new DesktopGroup();
-        g.setName(resolveName(request.getName(), request.getDescription()));
+        g.setName(name);
         g.setDescription(request.getDescription());
         DesktopGroup savedGroup = desktopGroupRepository.save(g);
         log.info("createDesktopGroup — created id={} name={}", savedGroup.getId(), savedGroup.getName());
@@ -170,24 +181,9 @@ public class DesktopService {
         return dg.getUserGroups().stream().map(UserGroupDto::from).toList();
     }
 
-    /**
-     * Resolves the effective name for a desktop/desktop-group, falling back to
-     * {@code description} when {@code name} is blank.
-     *
-     * @param name the requested name, possibly blank or {@code null}
-     * @param description the requested description, used as a fallback name
-     * @return {@code name} if non-blank, otherwise {@code description}
-     * @throws DesktopGroupNameRequiredException if both {@code name} and {@code description}
-     *     are blank
-     */
+    /** Returns {@code name} if non-blank, otherwise {@code description} (validated non-blank upstream). */
     private String resolveName(String name, String description) {
-        if (name != null && !name.isBlank()) {
-            return name;
-        }
-        if (description != null && !description.isBlank()) {
-            return description;
-        }
-        throw new DesktopGroupNameRequiredException();
+        return name != null && !name.isBlank() ? name : description;
     }
 
     private Desktop findDesktopById(Integer id) {
