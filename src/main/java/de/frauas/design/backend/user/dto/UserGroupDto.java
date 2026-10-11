@@ -2,6 +2,7 @@ package de.frauas.design.backend.user.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import de.frauas.design.backend.user.model.UserGroup;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,7 +23,10 @@ import java.util.List;
 @AllArgsConstructor
 public class UserGroupDto {
     private Integer id;
+    @Size(max = 255)
     private String name;
+
+    @Size(max = 255)
     private String description;
 
     /**

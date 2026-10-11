@@ -21,12 +21,13 @@ public class PatchUserRequest {
     @Size(min = 1, max = 255, message = "name must be between 1 and 255 characters")
     private String name;
 
+    @Size(max = 255, message = "email must be at most 255 characters")
     @Email(message = "email must be a valid e-mail address")
     private String email;
 
     @Pattern(
             regexp = PasswordPolicy.PASSWORD_REGEX,
-            message = "password must be at least 8 characters and contain uppercase, lowercase, and a digit")
+            message = PasswordPolicy.MESSAGE)
     private String password;
 
     private List<Integer> groups;
