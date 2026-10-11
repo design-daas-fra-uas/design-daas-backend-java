@@ -10,6 +10,7 @@ import org.springframework.mail.MailException;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
@@ -50,6 +51,7 @@ public class MailService {
      * @param registrationCode the one-time code to embed in the email
      * @param expiresInHours how many hours the code remains valid, shown to the recipient
      */
+    @Async
     public void sendRegistrationCode(String toEmail, String registrationCode, int expiresInHours) {
         if (!mailEnabled) {
             log.info(
@@ -74,6 +76,7 @@ public class MailService {
      * @param userId      the requesting user's ID (as string)
      * @param application the application name being requested
      */
+    @Async
     public void sendApplicationRequestEmail(String userEmail, String userName, String userId, String application) {
         if (!mailEnabled) {
             log.info(
