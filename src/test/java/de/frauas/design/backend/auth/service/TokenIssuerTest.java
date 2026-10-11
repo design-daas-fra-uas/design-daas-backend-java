@@ -16,6 +16,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 
+import static java.time.Clock.systemUTC;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -42,7 +43,13 @@ class TokenIssuerTest {
     @BeforeEach
     void setUp() {
         tokenIssuer = new TokenIssuer(
-                jwtEncoder, refreshTokenRepository, accessTokenRepository, "http://localhost:8080", 3600L, 30L);
+                jwtEncoder,
+                refreshTokenRepository,
+                accessTokenRepository,
+                systemUTC(),
+                "http://localhost:8080",
+                3600L,
+                30L);
     }
 
     @Test
