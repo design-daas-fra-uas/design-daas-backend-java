@@ -20,5 +20,5 @@ public class SecurityProperties {
      * Whether Swagger UI and the generated OpenAPI documentation are
      * accessible without authentication.
      */
-    private final boolean swaggerPublic = false;
+    private boolean swaggerPublic = false;
 }
