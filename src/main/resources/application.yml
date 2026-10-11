@@ -1,6 +1,11 @@
 server:
   port: 8080
 
+management:
+  health:
+    mail:
+      enabled: ${MAIL_ENABLED:false}
+
 spring:
   application:
     name: design-daas-backend
@@ -25,16 +30,19 @@ spring:
     locations: classpath:db/migration
 
   mail:
-    host: ${MAIL_HOST:localhost}
-    port: ${MAIL_PORT:25}
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
-          auth: false
+          auth: true
           starttls:
-            enable: false
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 app:
   admin-initializer:
