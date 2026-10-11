@@ -62,8 +62,7 @@ class OAuth2SessionControllerIntegrationTest extends BaseIntegrationTest {
 
     @AfterAll
     void cleanup() {
-        accessTokenRepository.deleteByUserId(testUser.getId());
-        refreshTokenRepository.deleteByUserId(testUser.getId());
+        deleteTokensOf(testUser.getId());
         userRepository.deleteById(testUser.getId());
     }
 

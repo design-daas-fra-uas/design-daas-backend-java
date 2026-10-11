@@ -55,8 +55,7 @@ class TokenControllerIntegrationTest extends BaseIntegrationTest {
 
     @AfterAll
     void cleanup() {
-        accessTokenRepository.deleteByUserId(testUser.getId());
-        refreshTokenRepository.deleteByUserId(testUser.getId());
+        deleteTokensOf(testUser.getId());
         userRepository.deleteById(testUser.getId());
     }
 
