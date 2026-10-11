@@ -1,5 +1,7 @@
 package de.frauas.design.backend.auth.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 /**
  * Summary of a valid session, returned by {@code SessionService#getSession} for
  * {@code GET /oauth2/user/session}.
@@ -11,4 +13,4 @@ package de.frauas.design.backend.auth.dto;
  * @param userId the user's numeric id (the JWT's {@code sub} claim)
  * @param name   the user's display name
  */
-public record SessionInfoDto(Integer userId, String name) {}
+public record SessionInfoDto(@JsonProperty("user_id") Integer userId, @JsonProperty("name") String name) {}
