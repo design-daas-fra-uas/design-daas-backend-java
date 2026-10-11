@@ -10,14 +10,10 @@ import java.util.List;
 /**
  * Request DTO for POST /desktop.
  * The Frontend sends { "description": "...", "groups": [{ "description": "..." }] }.
- * "name" is optional — falls back to "description" when absent.
+ * Each subgroup is named after its description.
  */
 @Data
 public class DesktopCreateRequest {
-
-    /** Optional — falls back to description when not provided. */
-    @Size(max = 255)
-    private String name;
 
     /** Required */
     @NotBlank
@@ -30,9 +26,6 @@ public class DesktopCreateRequest {
     /** A desktop subgroup to be created alongside the parent desktop. */
     @Data
     public static class SubGroupRequest {
-        @Size(max = 255)
-        private String name;
-
         @NotBlank
         @Size(max = 255)
         private String description;

@@ -18,7 +18,6 @@ import java.util.List;
 @AllArgsConstructor
 public class DesktopDto {
     private Integer id;
-    private String name;
     private String description;
 
     /**
@@ -32,7 +31,6 @@ public class DesktopDto {
     public static DesktopDto from(Desktop d) {
         return DesktopDto.builder()
                 .id(d.getId())
-                .name(d.getName())
                 .description(d.getDescription())
                 .groups(d.getDesktopGroups().stream().map(DesktopGroup::getId).toList())
                 .build();
