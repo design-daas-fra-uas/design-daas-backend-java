@@ -11,11 +11,15 @@ import de.frauas.design.backend.user.model.User;
 import de.frauas.design.backend.user.model.UserGroup;
 import de.frauas.design.backend.user.repository.UserGroupRepository;
 import de.frauas.design.backend.user.repository.UserRepository;
+import de.frauas.design.backend.shared.event.UserSessionsInvalidatedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -48,6 +52,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final MailService mailService;
     private final AccountValidator accountValidator;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Registers a new, disabled user and emails them a registration code that must be
@@ -75,7 +80,9 @@ public class UserService {
         }
         userRepository.save(user);
         log.info("createUser — user created id={} email={}", user.getId(), LogMasking.maskEmail(user.getEmail()));
-        mailService.sendRegistrationCode(user.getEmail(), user.getRegistrationCode(), REGISTRATION_CODE_TIMEOUT_HOURS);
+        String email = user.getEmail();
+        String registrationCode = user.getRegistrationCode();
+        runAfterCommit(() -> mailService.sendRegistrationCode(email, registrationCode, REGISTRATION_CODE_TIMEOUT_HOURS));
         return UserDto.from(user);
     }
 
@@ -150,6 +157,7 @@ public class UserService {
         if (request.getPassword() != null) {
             accountValidator.validatePassword(request.getPassword());
             user.setPassword(passwordEncoder.encode(request.getPassword()));
+            eventPublisher.publishEvent(new UserSessionsInvalidatedEvent(id));
         }
         if (request.getGroups() != null) {
             user.setGroups(loadGroupsOrThrow(request.getGroups()));
@@ -189,6 +197,7 @@ public class UserService {
         User user = getUserOrThrow(id);
         user.setEnabled(false);
         userRepository.save(user);
+        eventPublisher.publishEvent(new UserSessionsInvalidatedEvent(id));
         log.info("disableUser — user disabled id={}", id);
         return UserDto.from(user);
     }
@@ -205,8 +214,10 @@ public class UserService {
     public void requestApplication(Integer userId, String application) {
         log.debug("requestApplication — userId={} application={}", userId, application);
         BaseUser baseUser = userRepository.findById(userId).orElseThrow(() -> new AccountNotFoundException(userId));
-        mailService.sendApplicationRequestEmail(
-                baseUser.getEmail(), baseUser.getName(), String.valueOf(baseUser.getId()), application);
+        String email = baseUser.getEmail();
+        String name = baseUser.getName();
+        String id = String.valueOf(baseUser.getId());
+        runAfterCommit(() -> mailService.sendApplicationRequestEmail(email, name, id, application));
         log.info("requestApplication — email sent for userId={} application={}", userId, application);
     }
 
@@ -235,6 +246,26 @@ public class UserService {
             throw new IllegalArgumentException("Unknown user group ids: " + missingIds);
         }
         return groups;
+    }
+
+    /**
+     * Runs {@code action} once the current transaction commits, so slow I/O (e.g. SMTP
+     * sends) never keeps database locks held longer than necessary. Falls back to running
+     * immediately if no transaction is active (e.g. during tests).
+     *
+     * @param action the work to defer until after commit
+     */
+    private void runAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
     }
 
     private String generateRegistrationCode() {

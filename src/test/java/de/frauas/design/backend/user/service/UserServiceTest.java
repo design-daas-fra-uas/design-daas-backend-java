@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
@@ -50,6 +51,9 @@ class UserServiceTest {
     @Mock
     MailService mailService;
 
+    @Mock
+    ApplicationEventPublisher eventPublisher;
+
     UserService userService;
 
     @BeforeEach
@@ -59,7 +63,7 @@ class UserServiceTest {
         // and using the real thing keeps these tests exercising the actual validation rules.
         AccountValidator accountValidator = new AccountValidator(userRepository);
         userService =
-                new UserService(userRepository, userGroupRepository, passwordEncoder, mailService, accountValidator);
+                new UserService(userRepository, userGroupRepository, passwordEncoder, mailService, accountValidator, eventPublisher);
     }
 
     // -------------------------------------------------------------------------
