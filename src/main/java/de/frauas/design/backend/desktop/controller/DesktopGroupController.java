@@ -1,5 +1,6 @@
 package de.frauas.design.backend.desktop.controller;
 
+import de.frauas.design.backend.desktop.dto.DesktopGroupCreateRequest;
 import de.frauas.design.backend.desktop.dto.DesktopGroupDto;
 import de.frauas.design.backend.desktop.exception.DesktopGroupNotFoundException;
 import de.frauas.design.backend.desktop.exception.UserGroupAlreadyAssociatedException;
@@ -10,6 +11,7 @@ import de.frauas.design.backend.user.exception.UserGroupNotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,15 +52,14 @@ public class DesktopGroupController {
     }
 
     /**
-     * Creates a new desktop group. Business rules (e.g. {@code name} falling back to
-     * {@code description} when blank, and requiring at least one of the two) are enforced
-     * by {@link DesktopService#createDesktopGroup}, not here.
+     * Creates a new desktop group. {@code name} falls back to {@code description} when blank;
+     * a duplicate name is rejected with 409 by {@link DesktopService#createDesktopGroup}.
      *
      * @param request the group to create
-     * @return 200 OK with the created {@link DesktopGroupDto}
+     * @return 201 Created with the created {@link DesktopGroupDto}
      */
     @PostMapping("/desktop_group")
-    public ResponseEntity<DesktopGroupDto> createDesktopGroup(@Valid @RequestBody DesktopGroupDto request) {
+    public ResponseEntity<DesktopGroupDto> createDesktopGroup(@Valid @RequestBody DesktopGroupCreateRequest request) {
 
         log.info("POST /desktop_group — creating desktop group name={}", request.getName());
 
@@ -66,7 +67,7 @@ public class DesktopGroupController {
 
         log.info("POST /desktop_group — created id={} name={}", result.getId(), result.getName());
 
-        return ResponseEntity.ok(result);
+        return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
     /**
@@ -75,7 +76,7 @@ public class DesktopGroupController {
      *
      * @param id the desktop group ID
      * @param userGroupId the user group ID
-     * @return 200 OK with the desktop group's user groups after the association is added
+     * @return 201 Created with the desktop group's user groups after the association is added
      * @throws DesktopGroupNotFoundException if no desktop group exists with the given id (404)
      * @throws UserGroupNotFoundException if no user group exists with the given id (404)
      * @throws UserGroupAlreadyAssociatedException if already associated (409)
@@ -90,6 +91,6 @@ public class DesktopGroupController {
 
         log.info("POST /desktop_group/{}/user_group/{} — association created", id, userGroupId);
 
-        return ResponseEntity.ok(updatedUserGroups);
+        return ResponseEntity.status(HttpStatus.CREATED).body(updatedUserGroups);
     }
 }
