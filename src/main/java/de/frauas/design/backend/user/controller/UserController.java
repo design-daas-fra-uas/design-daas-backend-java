@@ -9,6 +9,7 @@ import de.frauas.design.backend.user.dto.UserDto;
 import de.frauas.design.backend.user.dto.ValidateEmailRequest;
 import de.frauas.design.backend.user.service.UserService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -59,7 +60,7 @@ public class UserController {
      * @return 200 OK if verified, 400 Bad Request if the code is missing/incorrect/expired
      */
     @PostMapping("/user/validate_email")
-    public ResponseEntity<Void> validateEmail(@RequestBody ValidateEmailRequest request) {
+    public ResponseEntity<Void> validateEmail(@Valid @RequestBody ValidateEmailRequest request) {
         log.info("POST /user/validate_email — email={}", LogMasking.maskEmail(request.getEmail()));
         boolean ok = userService.validateEmail(request.getEmail(), request.getRegistrationCode());
         if (ok) {
@@ -148,7 +149,9 @@ public class UserController {
     @PostMapping("/user/request-application/{application}/{isoCode}")
     @PreAuthorize(Authorities.IS_ANY_USER)
     public ResponseEntity<Void> requestApplication(
-            @PathVariable String application, @PathVariable String isoCode, @AuthenticationPrincipal Jwt jwt) {
+            @PathVariable @Pattern(regexp = "[\\w .-]{1,100}", message = "invalid application name") String application,
+            @PathVariable @Pattern(regexp = "[A-Za-z0-9_-]{1,10}", message = "invalid ISO code") String isoCode,
+            @AuthenticationPrincipal Jwt jwt) {
         Integer userId = jwtUserResolver.resolveFromAuthenticatedJwt(jwt);
         log.info("POST /user/request-application/{}/{} — userId={}", application, isoCode, userId);
         userService.requestApplication(userId, application);

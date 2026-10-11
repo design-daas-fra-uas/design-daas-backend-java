@@ -3,6 +3,7 @@ package de.frauas.design.backend.user.controller;
 import de.frauas.design.backend.shared.security.Authorities;
 import de.frauas.design.backend.user.dto.UserGroupDto;
 import de.frauas.design.backend.user.service.UserGroupService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -50,7 +51,7 @@ public class UserGroupController {
      * @return 200 OK with the created {@link UserGroupDto}
      */
     @PostMapping("/user_group")
-    public ResponseEntity<UserGroupDto> createUserGroup(@RequestBody UserGroupDto request) {
+    public ResponseEntity<UserGroupDto> createUserGroup(@Valid @RequestBody UserGroupDto request) {
         log.info("POST /user_group — creating user group name={}", request.getName());
         UserGroupDto result = userGroupService.createUserGroup(request);
         log.info("POST /user_group — user group created id={} name={}", result.getId(), result.getName());
@@ -66,7 +67,7 @@ public class UserGroupController {
      * @return 200 OK with the updated {@link UserGroupDto}
      */
     @PatchMapping("/user_group/{id}")
-    public ResponseEntity<UserGroupDto> updateUserGroup(@PathVariable Integer id, @RequestBody UserGroupDto request) {
+    public ResponseEntity<UserGroupDto> updateUserGroup(@PathVariable Integer id, @Valid @RequestBody UserGroupDto request) {
         log.info("PATCH /user_group/{} — updating user group", id);
         UserGroupDto result = userGroupService.updateUserGroup(id, request);
         log.info("PATCH /user_group/{} — updated successfully", id);
