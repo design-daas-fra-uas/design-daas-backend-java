@@ -38,6 +38,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     private static final String AUTH_TOKEN_PATH = "/oauth2/user/token";
     private static final String REGISTER_PATH = "/user";
     private static final String VALIDATE_EMAIL_PATH = "/user/validate_email";
+    private static final String RESEND_CODE_PATH = "/user/resend_code";
 
     private final RateLimitingProperties properties;
     private final RateLimiter rateLimiter;
@@ -82,7 +83,8 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     }
 
     private boolean isRateLimitedPath(String path) {
-        return AUTH_TOKEN_PATH.equals(path) || REGISTER_PATH.equals(path) || VALIDATE_EMAIL_PATH.equals(path);
+        return AUTH_TOKEN_PATH.equals(path) || REGISTER_PATH.equals(path) || VALIDATE_EMAIL_PATH.equals(path)
+                || RESEND_CODE_PATH.equals(path);
     }
 
     private int limitFor(String path) {
@@ -92,6 +94,8 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             case REGISTER_PATH -> properties.getRegisterRequestsPerMinute();
 
             case VALIDATE_EMAIL_PATH -> properties.getValidateEmailRequestsPerMinute();
+
+            case RESEND_CODE_PATH -> properties.getResendCodeRequestsPerMinute();
 
             default -> throw new IllegalArgumentException("Unsupported rate-limited path: " + path);
         };
