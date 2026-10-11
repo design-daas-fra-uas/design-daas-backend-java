@@ -15,6 +15,7 @@ import static de.frauas.design.backend.integration.MockJwt.userJwt;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -37,24 +38,23 @@ class DesktopControllerIntegrationTest extends BaseIntegrationTest {
 
     @Test
     @Order(2)
-    @DisplayName("POST /desktop – creates desktop with admin JWT")
-    void createDesktop_adminJwt_returns200() throws Exception {
+    @DisplayName("POST /desktop – creates desktop with admin JWT and returns Location")
+    void createDesktop_adminJwt_returns201() throws Exception {
         String body = objectMapper.writeValueAsString(Map.of(
-                "name", "IntegrationDesktop",
                 "description", "Integration Test Desktop"));
 
-        String response = mockMvc.perform(post("/desktop")
+        String location = mockMvc.perform(post("/desktop")
                         .with(adminJwt(999))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("IntegrationDesktop"))
+                .andExpect(status().isCreated())
+                .andExpect(content().string(""))
                 .andReturn()
                 .getResponse()
-                .getContentAsString();
+                .getHeader("Location");
 
-        // Extract created ID for subsequent tests
-        createdDesktopId = objectMapper.readTree(response).get("id").asInt();
+        assertNotNull(location);
+        createdDesktopId = Integer.valueOf(location.substring(location.lastIndexOf('/') + 1));
     }
 
     @Test
@@ -62,7 +62,6 @@ class DesktopControllerIntegrationTest extends BaseIntegrationTest {
     @DisplayName("POST /desktop – returns 403 with user JWT")
     void createDesktop_userJwt_returns403() throws Exception {
         String body = objectMapper.writeValueAsString(Map.of(
-                "name", "ShouldFail",
                 "description", "Should not be created"));
 
         mockMvc.perform(post("/desktop")

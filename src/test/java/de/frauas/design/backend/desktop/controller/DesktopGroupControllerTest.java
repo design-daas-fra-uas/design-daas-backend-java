@@ -5,7 +5,6 @@ import de.frauas.design.backend.desktop.dto.DesktopGroupDto;
 import de.frauas.design.backend.desktop.exception.DesktopGroupAlreadyExistsException;
 import de.frauas.design.backend.desktop.exception.DesktopGroupNotFoundException;
 import de.frauas.design.backend.desktop.service.DesktopService;
-import de.frauas.design.backend.user.dto.UserGroupDto;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +17,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -33,7 +34,7 @@ class DesktopGroupControllerTest {
     @Test
     @DisplayName("getAllDesktopGroups returns 200 with the service response")
     void getAllDesktopGroups_returnsOk() {
-        DesktopGroupDto group = DesktopGroupDto.builder().id(1).name("DG1").build();
+        DesktopGroupDto group = DesktopGroupDto.builder().id(1).description("DG1").build();
         when(desktopService.getAllDesktopGroups()).thenReturn(List.of(group));
 
         var response = desktopGroupController.getAllDesktopGroups();
@@ -43,22 +44,16 @@ class DesktopGroupControllerTest {
     }
 
     @Test
-    @DisplayName("createDesktopGroup returns 201 with the created group")
+    @DisplayName("createDesktopGroup returns 201 with no body")
     void createDesktopGroup_returnsCreated() {
         DesktopGroupCreateRequest request = new DesktopGroupCreateRequest();
-        request.setName("DG1");
         request.setDescription("Group 1");
-        DesktopGroupDto responseBody = DesktopGroupDto.builder()
-                .id(5)
-                .name("DG1")
-                .description("Group 1")
-                .build();
-        when(desktopService.createDesktopGroup(request)).thenReturn(responseBody);
 
         var response = desktopGroupController.createDesktopGroup(request);
 
+        verify(desktopService).createDesktopGroup(request);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(response.getBody()).isEqualTo(responseBody);
+        assertThat(response.getBody()).isNull();
     }
 
     @Test
@@ -66,28 +61,26 @@ class DesktopGroupControllerTest {
     void createDesktopGroup_duplicate_propagatesException() {
         DesktopGroupCreateRequest request = new DesktopGroupCreateRequest();
         request.setDescription("Group 1");
-        when(desktopService.createDesktopGroup(request)).thenThrow(new DesktopGroupAlreadyExistsException("Group 1"));
+        doThrow(new DesktopGroupAlreadyExistsException("Group 1")).when(desktopService).createDesktopGroup(request);
 
         assertThatThrownBy(() -> desktopGroupController.createDesktopGroup(request))
                 .isInstanceOf(DesktopGroupAlreadyExistsException.class);
     }
 
     @Test
-    @DisplayName("addUserGroup returns 201 with the updated user groups")
+    @DisplayName("addUserGroup returns 201 with no body")
     void addUserGroup_returnsCreated() {
-        UserGroupDto userGroup = UserGroupDto.builder().id(2).name("UG1").build();
-        when(desktopService.addUserGroupToDesktopGroup(1, 2)).thenReturn(List.of(userGroup));
-
         var response = desktopGroupController.addUserGroup(1, 2);
 
+        verify(desktopService).addUserGroupToDesktopGroup(1, 2);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
-        assertThat(response.getBody()).containsExactly(userGroup);
+        assertThat(response.getBody()).isNull();
     }
 
     @Test
     @DisplayName("addUserGroup propagates not found errors from the service")
     void addUserGroup_missingDesktopGroup_propagatesException() {
-        when(desktopService.addUserGroupToDesktopGroup(1, 2)).thenThrow(new DesktopGroupNotFoundException(1));
+        doThrow(new DesktopGroupNotFoundException(1)).when(desktopService).addUserGroupToDesktopGroup(1, 2);
 
         assertThatThrownBy(() -> desktopGroupController.addUserGroup(1, 2))
                 .isInstanceOf(DesktopGroupNotFoundException.class);

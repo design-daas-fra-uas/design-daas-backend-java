@@ -18,6 +18,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -29,6 +30,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -79,8 +82,8 @@ class DesktopServiceTest {
         }
 
         @Test
-        @DisplayName("createDesktop links created sub-groups into the returned DTO")
-        void createDesktop_withGroups_returnsGroupIds() {
+        @DisplayName("createDesktop links created sub-groups to the desktop")
+        void createDesktop_withGroups_linksGroups() {
             DesktopCreateRequest.SubGroupRequest subGroupRequest = new DesktopCreateRequest.SubGroupRequest();
             subGroupRequest.setDescription("Sub Group");
 
@@ -99,10 +102,28 @@ class DesktopServiceTest {
                 return group;
             });
 
-            DesktopDto result = desktopService.createDesktop(request);
+            Integer id = desktopService.createDesktop(request);
 
-            assertThat(result.getDescription()).isEqualTo("Desktop Description");
-            assertThat(result.getGroups()).containsExactly(20);
+            ArgumentCaptor<DesktopGroup> captor = ArgumentCaptor.forClass(DesktopGroup.class);
+            verify(desktopGroupRepository).save(captor.capture());
+            assertThat(id).isEqualTo(10);
+            assertThat(captor.getValue().getDescription()).isEqualTo("Sub Group");
+            assertThat(captor.getValue().getDesktops()).extracting(Desktop::getId).containsExactly(10);
+        }
+
+        @Test
+        @DisplayName("createDesktop rejects a sub-group description that already exists")
+        void createDesktop_duplicateSubGroup_throws() {
+            DesktopCreateRequest.SubGroupRequest subGroupRequest = new DesktopCreateRequest.SubGroupRequest();
+            subGroupRequest.setDescription("Sub Group");
+            DesktopCreateRequest request = new DesktopCreateRequest();
+            request.setDescription("Desktop Description");
+            request.setGroups(List.of(subGroupRequest));
+            when(desktopGroupRepository.existsByDescription("Sub Group")).thenReturn(true);
+
+            assertThatThrownBy(() -> desktopService.createDesktop(request))
+                    .isInstanceOf(DesktopGroupAlreadyExistsException.class);
+            verify(desktopRepository, never()).save(any());
         }
     }
 
@@ -115,48 +136,34 @@ class DesktopServiceTest {
     class DesktopGroupCrud {
 
         @Test
-        @DisplayName("createDesktopGroup persists and returns DTO")
-        void createDesktopGroup_valid_returnsDto() {
-            DesktopGroupCreateRequest req = groupRequest("DG1", "Group 1");
+        @DisplayName("createDesktopGroup persists the group")
+        void createDesktopGroup_valid_persists() {
+            DesktopGroupCreateRequest req = groupRequest("Group 1");
             when(desktopGroupRepository.save(any())).thenAnswer(inv -> {
                 DesktopGroup g = inv.getArgument(0);
                 g.setId(1);
                 return g;
             });
 
-            DesktopGroupDto dto = desktopService.createDesktopGroup(req);
+            desktopService.createDesktopGroup(req);
 
-            assertThat(dto.getName()).isEqualTo("DG1");
+            ArgumentCaptor<DesktopGroup> captor = ArgumentCaptor.forClass(DesktopGroup.class);
+            verify(desktopGroupRepository).save(captor.capture());
+            assertThat(captor.getValue().getDescription()).isEqualTo("Group 1");
         }
 
         @Test
-        @DisplayName("createDesktopGroup falls back to description when name is blank")
-        void createDesktopGroup_blankName_fallsBackToDescription() {
-            DesktopGroupCreateRequest req = groupRequest(" ", "Group 1");
-            when(desktopGroupRepository.save(any())).thenAnswer(inv -> {
-                DesktopGroup g = inv.getArgument(0);
-                g.setId(1);
-                return g;
-            });
-
-            DesktopGroupDto dto = desktopService.createDesktopGroup(req);
-
-            assertThat(dto.getName()).isEqualTo("Group 1");
-        }
-
-        @Test
-        @DisplayName("createDesktopGroup rejects a name that already exists")
-        void createDesktopGroup_duplicateName_throws() {
-            DesktopGroupCreateRequest req = groupRequest(" ", "Group 1");
-            when(desktopGroupRepository.existsByName("Group 1")).thenReturn(true);
+        @DisplayName("createDesktopGroup rejects a description that already exists")
+        void createDesktopGroup_duplicate_throws() {
+            DesktopGroupCreateRequest req = groupRequest("Group 1");
+            when(desktopGroupRepository.existsByDescription("Group 1")).thenReturn(true);
 
             assertThatThrownBy(() -> desktopService.createDesktopGroup(req))
                     .isInstanceOf(DesktopGroupAlreadyExistsException.class);
         }
 
-        private DesktopGroupCreateRequest groupRequest(String name, String description) {
+        private DesktopGroupCreateRequest groupRequest(String description) {
             DesktopGroupCreateRequest req = new DesktopGroupCreateRequest();
-            req.setName(name);
             req.setDescription(description);
             return req;
         }
@@ -168,7 +175,7 @@ class DesktopServiceTest {
             desktop.setId(7);
             DesktopGroup group = new DesktopGroup();
             group.setId(1);
-            group.setName("DG1");
+            group.setDescription("DG1");
             group.getDesktops().add(desktop);
             when(desktopGroupRepository.findAll()).thenReturn(List.of(group));
 
@@ -224,7 +231,7 @@ class DesktopServiceTest {
         }
 
         @Test
-        @DisplayName("associates the user group and returns the desktop group's user groups")
+        @DisplayName("associates the user group with the desktop group")
         void notAssociated_createsAssociation() {
             DesktopGroup dg = new DesktopGroup();
             dg.setId(1);
@@ -234,11 +241,10 @@ class DesktopServiceTest {
             when(userGroupRepository.findById(2)).thenReturn(Optional.of(ug));
             when(userGroupRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-            List<?> result = desktopService.addUserGroupToDesktopGroup(1, 2);
+            desktopService.addUserGroupToDesktopGroup(1, 2);
 
             assertThat(ug.getDesktopGroups()).contains(dg);
             assertThat(dg.getUserGroups()).contains(ug);
-            assertThat(result).hasSize(1);
         }
     }
 }
