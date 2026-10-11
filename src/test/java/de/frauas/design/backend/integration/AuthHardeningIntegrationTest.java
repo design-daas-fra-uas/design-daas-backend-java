@@ -67,8 +67,7 @@ class AuthHardeningIntegrationTest extends BaseIntegrationTest {
     void cleanup() {
         for (String email : new String[] {LOCK_EMAIL, LOGOUT_EMAIL, DISABLE_EMAIL}) {
             userRepository.findByEmail(email).ifPresent(u -> {
-                accessTokenRepository.deleteByUserId(u.getId());
-                refreshTokenRepository.deleteByUserId(u.getId());
+                deleteTokensOf(u.getId());
                 userRepository.deleteById(u.getId());
             });
         }
