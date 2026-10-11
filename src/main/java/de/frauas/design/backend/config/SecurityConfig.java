@@ -49,6 +49,7 @@ public class SecurityConfig {
                     auth.requestMatchers(HttpMethod.POST, "/user").permitAll();
                     auth.requestMatchers(HttpMethod.POST, "/user/validate_email")
                             .permitAll();
+                    auth.requestMatchers(HttpMethod.POST, "/user/resend_code").permitAll();
                     auth.requestMatchers(HttpMethod.POST, "/oauth2/user/token").permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/version").permitAll();
 

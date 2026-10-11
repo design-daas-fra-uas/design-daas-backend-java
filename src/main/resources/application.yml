@@ -66,6 +66,7 @@ app:
     auth-token-requests-per-minute: ${RATE_LIMIT_AUTH_TOKEN:20}
     register-requests-per-minute: ${RATE_LIMIT_REGISTER:5}
     validate-email-requests-per-minute: ${RATE_LIMIT_VALIDATE_EMAIL:10}
+    resend-code-requests-per-minute: ${RATE_LIMIT_RESEND_CODE:3}
     trusted-proxy-ranges: ${RATE_LIMIT_TRUSTED_PROXIES:127.0.0.1/32,::1/128}
   security:
     swagger-public: false
