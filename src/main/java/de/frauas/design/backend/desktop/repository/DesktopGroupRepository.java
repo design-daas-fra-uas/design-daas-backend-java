@@ -8,5 +8,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface DesktopGroupRepository extends JpaRepository<DesktopGroup, Integer> {
 
-    boolean existsByName(String name);
+    boolean existsByDescription(String description);
 }
