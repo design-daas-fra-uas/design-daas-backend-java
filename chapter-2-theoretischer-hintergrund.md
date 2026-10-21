@@ -1,21 +1,23 @@
 # 2 Theoretischer Hintergrund (Entwurf)
 
-> Status: Erster Entwurf zur Diskussion, Ziel ~15-20 Seiten (hier kürzer, als Grundlage zum Ausbauen).
+> Status: Überarbeiteter Entwurf, Ziel ~15-20 Seiten.
 > Zitierte Quellen sind real und verifiziert: MobiWis-2024-Paper/Folien, OJCC-2023-Artikel, Informatik-Spektrum-2024-Artikel
-> (alle aus der Ausschreibung), sowie offizielle RFCs/Dokumentationen für OAuth2/JWT/Spring/ArchUnit/Flyway/JaCoCo.
+> (alle aus der Ausschreibung), sowie offizielle RFCs, Standards und Dokumentationen für Virtualisierung,
+> OAuth2/JWT/TLS/bcrypt, Zugriffskontrollmodelle, Spring/Maven/Hibernate/JUnit sowie ArchUnit/Flyway/JaCoCo.
 > Platzhalter `[TODO]` / `[Quelle fehlt]` markieren Stellen, die noch ergänzt/belegt werden müssen.
 
 ---
 
-Dieses Kapitel legt die theoretische Grundlage für die in Kapitel 4 beschriebenen Entwurfsentscheidungen.
-Zunächst wird in 2.1 das Gesamtsystem DESIGN vorgestellt und eingeordnet, in welchem Teil dieser Architektur
-sich das in dieser Arbeit entwickelte Backend bewegt. Anschließend werden die drei Themenfelder behandelt,
-auf denen das Backend technisch aufbaut: die Authentifizierung über OAuth2 und JSON Web Token einschließlich
-des verwendeten Signaturverfahrens RS256 (2.2), die Autorisierung über ein rollen- und kaskadenbasiertes
-Berechtigungsmodell (2.3) sowie die eingesetzten Spring-Boot-Bausteine und Werkzeuge für Architektur- und
-Qualitätssicherung wie ArchUnit, Flyway und JaCoCo (2.4). Abschließend ordnet 2.5 diese Grundlagen den
-konkreten Modulen und Entscheidungen des Backends zu und grenzt ab, welche allgemeinen Technikgrundlagen
-bewusst nicht vertieft werden.
+Dieses Kapitel beschreibt die theoretischen Grundlagen, Standards, Bibliotheken und Werkzeuge, auf denen das
+in dieser Arbeit entwickelte Backend aufbaut. Zunächst wird in 2.1 das Gesamtsystem DESIGN und die darin
+verwendete Desktop-as-a-Service-Architektur vorgestellt, einschließlich der zugrundeliegenden
+Virtualisierungskonzepte (Hypervisoren, Container) und der internen Funktionsweise von Apache Guacamole.
+Anschließend werden drei Themenfelder behandelt: die Authentifizierung über OAuth2, JSON Web Token, RS256,
+Transport Layer Security und Passwort-Hashing mit bcrypt (2.2), die Autorisierung über Zugriffskontroll-
+modelle wie ACL, RBAC und ABAC sowie kaskadierende Entscheidungsmodelle (2.3) sowie Werkzeuge aus dem
+Java-Ökosystem für Build-Automatisierung, Anwendungsentwicklung, Persistenz, Tests sowie Architektur- und
+Qualitätssicherung, u. a. Maven, das Spring-Framework/Spring Boot, Hibernate/JPA, MariaDB, JUnit 5/Mockito,
+ArchUnit, Flyway und JaCoCo (2.4).
 
 ## 2.1 Desktop-as-a-Service und die Architektur von DESIGN
 
@@ -43,27 +45,13 @@ DESIGN auftraten, u. a. messbare Unterschiede in der Bereitstellungs- und Startz
 ca. 4-5 min, Neuanlage ca. 30-60 min) sowie die fehlende native Unterstützung von Sound, Mikrofon und
 Drucken durch VNC, die zusätzliche Komponenten gegenüber RDP erfordert [1].
 
-**Aus Sicht dieser Arbeit relevant:** Diese Komponenten (Guacamole, Proxmox, Docker/VM-Lebenszyklus,
-Sound-/Mikrofon-/Druck-Bridges) gehören zur **DaaS-Anwendung** („Engine“, Python, separates Repository) bzw.
-zur Infrastrukturebene von DESIGN und werden von ihr verwaltet, **nicht** vom Backend, das Gegenstand dieser
-Arbeit ist. Das Backend stellt stattdessen die Authentifizierungs-, Autorisierungs-, Benutzerverwaltungs- und
-Desktop-Inventar-Schnittstelle bereit, die von Frontend und DaaS-Anwendung genutzt wird (siehe Kapitel 3.1).
-Die Darstellung der Gesamtarchitektur in diesem Abschnitt dient daher der Einordnung des Backends in das
-Gesamtsystem, nicht der Beschreibung eigener Beiträge.
-
-Abbildung 2.1 fasst diese Einordnung vereinfacht zusammen. Das Frontend kommuniziert über eine
-REST-Schnittstelle mit dem Backend, um sich zu authentifizieren, Berechtigungen zu prüfen und das
-Desktop-Inventar des Nutzers abzurufen; die eigentliche Darstellung einer laufenden Anwendung läuft dagegen
-direkt als Web-Stream über Apache Guacamole, ohne das Backend zu involvieren. Das Backend wiederum stößt bei
-Bedarf Aktionen auf der DaaS-Engine an (z. B. „Desktop starten“), die ihrerseits Docker-Container bzw. die
-über Proxmox verwalteten virtuellen Maschinen anspricht. Backend und DaaS-Engine greifen dabei auf eine
-gemeinsame Datenbasis zu, in der unter anderem Nutzer, Gruppen und die in Kapitel 2.3 beschriebenen
-Berechtigungsregeln gespeichert sind.
+Abbildung 2.1 fasst Proxmox VE/KVM, Docker und Apache Guacamole als Komponenten der DESIGN-Architektur
+zusammen; die beiden folgenden Unterabschnitte vertiefen die technischen Grundlagen dieser Komponenten.
 
 ```mermaid
 flowchart LR
     U["Nutzer / Browser"] --> FE["Frontend"]
-    FE -- "REST, JWT (Auth, Permissions, Inventar)" --> BE["Backend\n(Gegenstand dieser Arbeit)"]
+    FE -- "REST, JWT (Auth, Permissions, Inventar)" --> BE["Backend"]
     FE -- "Web-Stream (VNC / RDP)" --> GUAC["Apache Guacamole"]
     BE -- "Steuerbefehle\n(z. B. Desktop starten)" --> ENGINE["DaaS-Engine\n(Python, separates Repository)"]
     ENGINE --> DOCKER["Docker-Container"]
@@ -74,7 +62,7 @@ flowchart LR
     ENGINE --> DB
 ```
 
-*Abbildung 2.1: Vereinfachte Architekturübersicht von DESIGN und Einordnung des Backends (eigene
+*Abbildung 2.1: Vereinfachte Architekturübersicht von DESIGN mit den beteiligten Komponenten (eigene
 Darstellung, inhaltlich angelehnt an die Beschreibung der Komponenten in [1], [2]).*
 
 [TODO: Abbildung 2.1 bei Bedarf als Vektorgrafik (draw.io/PlantUML-Export) statt Mermaid-Block einbinden,
