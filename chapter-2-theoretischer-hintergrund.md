@@ -68,31 +68,82 @@ Darstellung, inhaltlich angelehnt an die Beschreibung der Komponenten in [1], [2
 [TODO: Abbildung 2.1 bei Bedarf als Vektorgrafik (draw.io/PlantUML-Export) statt Mermaid-Block einbinden,
 falls das Vorlagen-Textsatzsystem kein Mermaid rendert.]
 
+### 2.1.1 Virtualisierungsarten: Hypervisoren und Container
+
+Die beiden in DESIGN eingesetzten Virtualisierungsformen beruhen auf unterschiedlichen technischen
+Grundprinzipien. Bei der klassischen Hardware-Virtualisierung unterscheidet die grundlegende Arbeit von
+Popek und Goldberg zwischen zwei Bauarten eines *Hypervisors*: Ein **Typ-1-Hypervisor** (auch *Bare-Metal-
+Hypervisor* genannt) läuft direkt auf der physischen Hardware ohne zwischengeschaltetes Betriebssystem und
+verwaltet selbst die virtuellen Maschinen, während ein **Typ-2-Hypervisor** als gewöhnliche Anwendung
+innerhalb eines bestehenden Host-Betriebssystems ausgeführt wird [21]. KVM (Kernel-based Virtual Machine),
+auf dem Proxmox VE aufbaut, verwandelt den Linux-Kernel selbst in einen Typ-1-Hypervisor, indem es dessen
+Prozessor- und Speicherverwaltung um Virtualisierungserweiterungen der CPU (Intel VT-x/AMD-V) ergänzt; jede
+virtuelle Maschine erhält dadurch ein vollständig eigenes Betriebssystem mit eigenem Kernel, eigenem
+Dateisystem und eigenen Gerätetreibern, was hohe Isolation, aber auch höheren Ressourcenverbrauch und
+längere Start- und Bereitstellungszeiten mit sich bringt.
+
+Containervirtualisierung mit **Docker** verfolgt demgegenüber einen grundsätzlich anderen Ansatz: Statt ein
+eigenes Betriebssystem zu virtualisieren, teilen sich alle Container denselben Host-Betriebssystem-Kernel
+und werden lediglich durch zwei Linux-Kernel-Mechanismen voneinander isoliert: *Namespaces* kapseln pro
+Container jeweils eigene Sichten auf Prozess-IDs, Netzwerkschnittstellen, Dateisystem-Mountpunkte und
+Hostnamen, sodass ein Prozess innerhalb eines Containers glaubt, exklusiven Zugriff auf diese Ressourcen zu
+haben, während *Control Groups* (cgroups) begrenzen, wie viel CPU-Zeit, Arbeitsspeicher und I/O-Bandbreite
+ein Container maximal verbrauchen darf. Eine Docker-Anwendung wird zudem als *Image* ausgeliefert, ein
+schreibgeschütztes, in übereinanderliegenden Schichten (*Layers*) aufgebautes Dateisystem-Archiv, aus dem zur
+Laufzeit ein beschreibbarer Container-Prozess gestartet wird. Weil dabei kein vollständiges Betriebssystem
+gebootet werden muss, lassen sich Container in der Regel in Sekunden statt Minuten starten und klonen, was
+die in [1] gemessenen Zeitunterschiede zwischen Docker und Windows-VMs erklärt [22].
+
+### 2.1.2 Apache Guacamole: clientloses Remote-Desktop-Gateway
+
+Technisch besteht Apache Guacamole aus zwei Hauptkomponenten: dem *guacamole-client*, einer Java-
+Webanwendung, die im Browser über HTML5 und WebSockets eine grafische Oberfläche bereitstellt, und *guacd*,
+einem nativen Hintergrunddienst, der die eigentliche Übersetzung zwischen Remote-Desktop-Protokollen (VNC,
+RDP, SSH) und dem schlanken, textbasierten *Guacamole-Protokoll* vornimmt [23]. Der Browser spricht dabei zu
+keinem Zeitpunkt direkt VNC oder RDP; stattdessen sendet guacd die Anzeige des entfernten Containers bzw.
+der virtuellen Maschine als eine Folge einfacher Zeichenbefehle (z. B. "zeichne dieses Bildfragment an
+Position x,y") über eine WebSocket-Verbindung an den Browser, der daraus mittels eines HTML5-Canvas-Elements
+das Bild zusammensetzt. Dieser Ansatz erklärt, warum Guacamole als *clientlos* bezeichnet wird: Es genügt ein
+gewöhnlicher Webbrowser, ohne dass Plugins, Java-Applets oder native RDP-/VNC-Clients installiert werden
+müssen.
+
+```mermaid
+flowchart LR
+    BR["Browser\n(HTML5-Canvas, WebSocket)"] <--> GC["guacamole-client\n(Java-Webanwendung)"]
+    GC <--> GD["guacd\n(Protokoll-Übersetzung)"]
+    GD <--> VNC["VNC-Server\n(im Container)"]
+    GD <--> RDP["RDP-Server\n(in der VM)"]
+```
+
+*Abbildung 2.2: Vereinfachte interne Architektur von Apache Guacamole (eigene Darstellung nach der
+Beschreibung in [23]).*
+
 ## 2.2 Authentifizierung: OAuth2, JSON Web Token und RS256
 
-Die Authentifizierung dieses Backends beruht auf drei Standards, die unterschiedliche Aufgaben übernehmen
-und erst im Zusammenspiel das vollständige Bild ergeben. OAuth 2.0 (RFC 6749) legt fest, *wer* unter
-welchen Bedingungen ein Zugriffstoken bekommen darf, und definiert dafür Rollen und Abläufe, sagt aber
-nichts darüber aus, wie dieses Token konkret aussieht [3]. JSON Web Token (RFC 7519) ist genau dieses
-konkrete Tokenformat: ein kompaktes, textbasiertes Format, mit dem sich Ansprüche (*Claims*) über einen
-Nutzer transportieren lassen [5]. RS256 schließlich ist kein eigener Standard, sondern ein in RFC 7518
+Die Authentifizierung über OAuth2 und JSON Web Token beruht auf drei Standards, die unterschiedliche
+Aufgaben übernehmen und erst im Zusammenspiel das vollständige Bild ergeben. OAuth 2.0 (RFC 6749) legt fest,
+*wer* unter welchen Bedingungen ein Zugriffstoken bekommen darf, und definiert dafür Rollen und Abläufe,
+sagt aber nichts darüber aus, wie dieses Token konkret aussieht [3]. JSON Web Token (RFC 7519) ist genau
+dieses konkrete Tokenformat: ein kompaktes, textbasiertes Format, mit dem sich Ansprüche (*Claims*) über
+einen Nutzer transportieren lassen [5]. RS256 schließlich ist kein eigener Standard, sondern ein in RFC 7518
 definierter Signaturalgorithmus, der festlegt, wie ein solches JWT gegen Manipulation abgesichert wird [7].
-Die folgenden Unterabschnitte erläutern zunächst diese drei Bausteine einzeln und beschreiben anschließend
-in 2.2.4, wie sie in diesem Backend zu einem vollständigen Anmeldevorgang zusammengesetzt werden.
+Die folgenden Unterabschnitte erläutern diese Bausteine einzeln und beschreiben anschließend in 2.2.5, wie
+Spring Security sie technisch zu einem vollständigen Authentifizierungs- und Autorisierungsablauf
+zusammensetzt.
 
 ### 2.2.1 OAuth2: Rollen, Protokollablauf und Grant-Typen
 
 RFC 6749 unterscheidet vier Rollen: den *Resource Owner* (die Person, der die geschützten Daten gehören,
-hier also der Nutzer des DESIGN-Systems), den *Client* (die Anwendung, die stellvertretend für den Nutzer
-auf eine Ressource zugreifen möchte, hier das Frontend), den *Authorization Server* (die Stelle, die nach
+also der Nutzer eines Systems), den *Client* (die Anwendung, die stellvertretend für den Nutzer auf eine
+Ressource zugreifen möchte, z. B. eine Frontend-Anwendung), den *Authorization Server* (die Stelle, die nach
 erfolgreicher Prüfung der Zugangsdaten ein Zugriffstoken ausstellt) und den *Resource Server* (die Stelle,
 die dieses Token entgegennimmt, prüft und daraufhin die eigentlich angefragte Ressource liefert) [3]. In
 vielen OAuth2-Systemen sind Authorization Server und Resource Server getrennte, eigenständige Dienste, zum
-Beispiel wenn sich eine Anwendung über einen externen Anbieter wie Google oder Microsoft anmeldet. Im
-vorliegenden Projekt übernimmt das Backend dagegen **beide** Rollen gleichzeitig: Es prüft die Zugangsdaten
-und stellt das Token aus (Authorization Server), und es validiert dieses Token bei jeder nachfolgenden
-API-Anfrage, um die eigenen Endpunkte zu schützen (Resource Server). Das ist zulässig und in
-Single-Vendor-Systemen üblich, in denen Frontend und Backend von derselben Partei betrieben werden.
+Beispiel wenn sich eine Anwendung über einen externen Anbieter wie Google oder Microsoft anmeldet. In
+sogenannten Single-Vendor-Systemen, in denen Client und die eigenen APIs von derselben Partei betrieben
+werden, ist es dagegen üblich, dass ein und derselbe Dienst beide Rollen gleichzeitig übernimmt: Er prüft
+die Zugangsdaten und stellt das Token aus (Authorization Server) und validiert dieses Token anschließend bei
+jeder nachfolgenden API-Anfrage, um die eigenen Endpunkte zu schützen (Resource Server).
 
 Der abstrakte Protokollablauf nach RFC 6749 besteht aus vier Schritten: Der Client fordert vom
 Ressourceninhaber eine Autorisierung an, erhält im Erfolgsfall einen *Authorization Grant* (einen Nachweis
@@ -108,33 +159,30 @@ direkt entgegennimmt und im Austausch gegen ein Token an den Authorization Serve
 beschreibt RFC 6749 den *Refresh-Token*-Mechanismus, mit dem ein Client ein abgelaufenes Zugriffstoken erneuern
 kann, ohne dass der Nutzer seine Zugangsdaten erneut eingeben muss [3].
 
-Abbildung 2.2 zeigt diesen abstrakten Ablauf, ergänzt um den für dieses Backend relevanten ROPC-Grant als
-konkrete Ausprägung des zweiten Schritts.
+Abbildung 2.3 zeigt diesen abstrakten Ablauf am Beispiel des ROPC-Grants als konkreter Ausprägung des
+zweiten Schritts.
 
 ```mermaid
 sequenceDiagram
     participant RO as Resource Owner (Nutzer)
-    participant C as Client (Frontend)
-    participant AS as Authorization Server (Backend)
-    participant RS as Resource Server (Backend)
+    participant C as Client
+    participant AS as Authorization Server
+    participant RS as Resource Server
 
     RO->>C: Benutzername + Passwort
-    C->>AS: POST /oauth2/user/token (ROPC-Grant)
+    C->>AS: POST /token (ROPC-Grant)
     AS->>AS: Zugangsdaten prüfen
-    AS-->>C: Access Token (JWT, RS256) + Refresh Token
-    C->>RS: GET /desktop (Authorization: Bearer Access Token)
+    AS-->>C: Access Token (JWT) + Refresh Token
+    C->>RS: GET /resource (Authorization: Bearer Access Token)
     RS->>RS: Signatur + Claims prüfen
     RS-->>C: geschützte Ressource
 ```
 
-*Abbildung 2.2: Abstrakter OAuth2-Protokollablauf nach RFC 6749, Abschnitt 1.2, konkretisiert für den in
-diesem Backend verwendeten Resource Owner Password Credentials Grant (eigene Darstellung).*
+*Abbildung 2.3: Abstrakter OAuth2-Protokollablauf nach RFC 6749, Abschnitt 1.2, konkretisiert für den
+Resource Owner Password Credentials Grant (eigene Darstellung).*
 
-Dieses Backend verwendet den ROPC-Grant, weil Frontend und Backend Teile desselben Projekts sind und kein
-externer Anbieter eingebunden wird; der Nutzer gibt seine Zugangsdaten also ohnehin nur gegenüber einer
-Komponente ein, der er vertrauen muss. Dabei ist allerdings offen zu benennen, dass die neuere
-IETF-Sicherheitsempfehlung RFC 9700 (*Best Current Practice for OAuth 2.0 Security*) empfiehlt, auf den
-ROPC-Grant in neuen Systemen möglichst zu verzichten, unter anderem weil er sich schlecht mit
+Die neuere IETF-Sicherheitsempfehlung RFC 9700 (*Best Current Practice for OAuth 2.0 Security*) empfiehlt,
+auf den ROPC-Grant in neuen Systemen möglichst zu verzichten, unter anderem weil er sich schlecht mit
 Mehr-Faktor-Authentifizierung verträgt und den Client dazu zwingt, mit Klartext-Zugangsdaten umzugehen [8].
 Für dieses Backend wird dieses Risiko als vertretbar eingeschätzt, weil es sich um ein geschlossenes System
 ohne Drittanbieter-Clients handelt und die Übertragung ausschließlich verschlüsselt über TLS erfolgt; eine
