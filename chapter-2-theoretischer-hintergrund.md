@@ -184,10 +184,14 @@ Resource Owner Password Credentials Grant (eigene Darstellung).*
 Die neuere IETF-Sicherheitsempfehlung RFC 9700 (*Best Current Practice for OAuth 2.0 Security*) empfiehlt,
 auf den ROPC-Grant in neuen Systemen möglichst zu verzichten, unter anderem weil er sich schlecht mit
 Mehr-Faktor-Authentifizierung verträgt und den Client dazu zwingt, mit Klartext-Zugangsdaten umzugehen [8].
-Für dieses Backend wird dieses Risiko als vertretbar eingeschätzt, weil es sich um ein geschlossenes System
-ohne Drittanbieter-Clients handelt und die Übertragung ausschließlich verschlüsselt über TLS erfolgt; eine
-Umstellung auf den Authorization-Code-Grant mit PKCE wäre dennoch eine sinnvolle Erweiterung für eine
-zukünftige Version des Frontends und wird in Kapitel 4 kurz als Ausblick aufgegriffen.
+Als sicherere Alternative gilt der Authorization-Code-Grant in Kombination mit der Erweiterung *Proof Key
+for Code Exchange* (PKCE, RFC 7636) [24]: Der Client erzeugt dabei vor der Weiterleitung zufällig einen
+geheimen Wert (*code_verifier*) und übermittelt nur dessen gehashten Wert (*code_challenge*) an den
+Authorization Server; beim späteren Eintausch des Autorisierungscodes muss der Client den ursprünglichen
+`code_verifier` erneut mitsenden, den der Authorization Server gegen die zuvor übermittelte
+`code_challenge` prüft. Ein Angreifer, der lediglich den Autorisierungscode abfängt, kann diesen damit nicht
+mehr gegen ein Token eintauschen, weil ihm der `code_verifier` fehlt. Abbildung 2.4 stellt diesen Ablauf dem
+clientlosen Client-Credentials-Grant gegenüber, der ganz ohne Resource Owner auskommt.
 
 Die Rückgabe und Verwendung des ausgestellten Tokens ist in RFC 6750 als sogenanntes *Bearer-Token*
 beschrieben: Wer das Token besitzt, kann damit auf die Ressource zugreifen, unabhängig davon, ob er der
