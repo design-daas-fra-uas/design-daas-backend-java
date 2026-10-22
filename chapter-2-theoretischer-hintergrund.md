@@ -193,6 +193,37 @@ Authorization Server; beim späteren Eintausch des Autorisierungscodes muss der 
 mehr gegen ein Token eintauschen, weil ihm der `code_verifier` fehlt. Abbildung 2.4 stellt diesen Ablauf dem
 clientlosen Client-Credentials-Grant gegenüber, der ganz ohne Resource Owner auskommt.
 
+```mermaid
+sequenceDiagram
+    participant RO as Resource Owner (Nutzer)
+    participant C as Client
+    participant AS as Authorization Server
+    participant RS as Resource Server
+    Note over RO, RS: Authorization-Code-Grant mit PKCE
+    C ->> C: code_verifier erzeugen, code_challenge ableiten
+    RO ->> AS: Login auf separater Seite des Authorization Servers
+    AS -->> C: Authorization Code (per Redirect)
+    C ->> AS: POST /token (Code + code_verifier)
+    AS ->> AS: code_verifier gegen code_challenge prüfen
+    AS -->> C: Access Token + Refresh Token
+```
+
+```mermaid
+sequenceDiagram
+    participant C as Client (eigenständiger Dienst)
+    participant AS as Authorization Server
+    participant RS as Resource Server
+    Note over C, RS: Client-Credentials-Grant (kein Nutzer beteiligt)
+    C ->> AS: POST /token (client_id + client_secret)
+    AS ->> AS: Client-Zugangsdaten prüfen
+    AS -->> C: Access Token
+    C ->> RS: GET /resource (Authorization: Bearer Access Token)
+    RS -->> C: geschützte Ressource
+```
+
+*Abbildung 2.4: Authorization-Code-Grant mit PKCE (oben) und Client-Credentials-Grant (unten) als zwei
+weitere, in RFC 6749 bzw. RFC 7636 beschriebene Grant-Varianten (eigene Darstellung).*
+
 Die Rückgabe und Verwendung des ausgestellten Tokens ist in RFC 6750 als sogenanntes *Bearer-Token*
 beschrieben: Wer das Token besitzt, kann damit auf die Ressource zugreifen, unabhängig davon, ob er der
 ursprüngliche Nutzer ist, weshalb die Übertragung ausschließlich über TLS erfolgen sollte [4]. Der Client
