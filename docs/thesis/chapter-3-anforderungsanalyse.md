@@ -1,27 +1,28 @@
 # 3 Anforderungsanalyse
 
-Die Anforderungsanalyse fragt nach dem „was", nicht nach dem „wie": Sie legt fest, welches Problem gelöst
-werden soll und welche Eigenschaften die Lösung erfüllen muss, nicht bereits, mit welchen Klassen,
-Bibliotheken oder Algorithmen dies in Kapitel 4 geschieht. Grundlage dieses Kapitels sind drei Quellen: die
-offizielle Aufgabenstellung (Ausschreibung, Arbeitspakete AP1–AP6), die vollständige Quellcode- und
-Dokumentationsanalyse des bestehenden PHP-Backends (`design-daas-application-backend`, Abschnitt 3.1) sowie
-die architektonische Dokumentation des im Rahmen dieser Arbeit entstandenen neuen Backends (`docs/ARC42.md`
-dieses Repositories, Abschnitt 3.4). Keine der im Folgenden genannten Anforderungen ist frei erfunden; jede
-lässt sich auf eine konkrete Stelle im Code, einer Konfigurationsdatei oder der Ausschreibung zurückführen.
+Dieses Kapitel beschreibt, welches Problem mit dieser Arbeit gelöst werden soll und welche Eigenschaften die
+Lösung erfüllen muss — nicht, mit welchen Klassen, Bibliotheken oder Algorithmen dies in Kapitel 4 geschieht.
+Es stützt sich auf zwei Quellen: die offizielle Aufgabenstellung (Ausschreibung, Arbeitspakete AP1–AP6) und
+die vollständige Quellcode-Analyse des bestehenden PHP-Backends (`design-daas-application-backend`,
+Abschnitt 3.1). Keine der im Folgenden genannten Anforderungen ist frei erfunden; jede lässt sich auf eine
+konkrete Stelle im Code, einer Konfigurationsdatei oder der Ausschreibung zurückführen. Abschnitt 3.4
+beschreibt zusätzlich den tatsächlich realisierten Zielzustand anhand des in dieser Arbeit entstandenen
+Java-Quellcodes selbst (Paketstruktur, Datenbankschema, Testklassen), nicht anhand einer separaten
+Architekturbeschreibung.
 
 ---
 
 ## 3.1 Generelle Zielsetzung
 
-### 3.1.1 Was soll untersucht und erreicht werden?
+### 3.1.1 Ausgangslage und Zielsetzung des Backends
 
 Im Rahmen dieser Arbeit soll das Backend des Desktop-as-a-Service-Systems **DESIGN** (Kapitel 2.1)
 vollständig neu entwickelt werden. Das bestehende Backend ist in PHP implementiert und wird in der
 Ausschreibung ausdrücklich als „qualitativ schwach" und „schlecht dokumentiert" bezeichnet, während die
 beiden anderen Systemteile — DaaS-Anwendung und Frontend — nach gleicher Quelle als qualitativ gut und
 dokumentiert gelten. Daraus ergibt sich die doppelte Zielsetzung dieses Kapitels: Erstens muss der
-Ist-Zustand des alten Backends so weit analysiert werden, dass sein nach außen sichtbares Verhalten
-(Schnittstellen, Datenformate, Berechtigungslogik) vollständig verstanden ist, da hierzu — anders als bei
+Ist-Zustand des alten Backends so weit analysiert werden, dass sein nach außen sichtbares Verhalten (Schnittstellen,
+Datenformate, Berechtigungslogik) vollständig verstanden ist, da hierzu — anders als bei
 DaaS-Anwendung und Frontend — keine brauchbare externe Dokumentation existiert und der Quellcode die
 einzige verlässliche Quelle ist. Zweitens muss daraus ein Anforderungskatalog abgeleitet werden, der
 festlegt, was ein funktional gleichwertiger, aber wart- und testbarer Nachfolgedienst leisten muss, ohne
@@ -29,8 +30,8 @@ bereits festzulegen, wie dies technisch umgesetzt wird (Gegenstand von Kapitel 4
 
 ### 3.1.2 Genereller Aufbau des Gesamtsystems
 
-Das Gesamtsystem **DESIGN** besteht laut Ausschreibung aus drei eigenständigen Repositories: der
-**DaaS-Anwendung** (Python, verwaltet laut Kapitel 2.1 Container, virtuelle Maschinen, Proxmox VE und
+Das Gesamtsystem **DESIGN** besteht laut Ausschreibung aus drei eigenständigen Repositories: der **DaaS-Anwendung**
+(Python, verwaltet laut Kapitel 2.1 Container, virtuelle Maschinen, Proxmox VE und
 Apache Guacamole und damit die eigentliche Bereitstellung von Desktops), dem **Frontend** (React,
 grafische Oberfläche für Endnutzer und Administratoren) und dem **Backend**, das Gegenstand dieser Arbeit
 ist. Diese drei Teile kommunizieren ausschließlich über REST-Schnittstellen miteinander; es gibt keine
@@ -44,33 +45,33 @@ Anforderungen.
 
 ### 3.1.3 Ist-Zustand des alten Backends (AP1/AP2)
 
-Die folgende Analyse beruht ausschließlich auf der vorhandenen Dokumentation (`ARCHITECTURE.md`,
-`SKELETON.md`, `composer.json`, `docker-compose.yml`) und dem Quellcode des Repositories
-`design-daas-application-backend`.
+Die folgende Analyse beruht auf der direkten Durchsicht des Quellcodes des Repositories
+`design-daas-application-backend` (Klassenstruktur, Routen-Attribute, Entitäten, Migrationsskripte,
+`composer.json`, `docker-compose.yml`).
 
 **Technologie-Stack.** Das alte Backend ist in PHP 8.2 implementiert und läuft als Apache-Modul innerhalb
 eines Docker-Containers. Tabelle 3.1 fasst die eingesetzten Bibliotheken und Werkzeuge je Schicht zusammen.
 
 *Tabelle 3.1: Technologie-Stack des alten PHP-Backends*
 
-| Schicht | Technologie |
-|---|---|
-| Sprache | PHP 8.2 |
-| HTTP-Server | Apache (im PHP-Container) |
-| ORM / Datenbank | Doctrine ORM 2.x + MariaDB |
-| Schema-Migrationen | Doctrine Migrations |
-| Dependency Injection | PHP-DI (Autowiring + Annotationen) |
-| HTTP-Routing | Symfony Routing (über PSR-7-Adapter) |
-| HTTP-Nachrichten | PSR-7 (Guzzle-Implementierung) |
-| OAuth2 | `league/oauth2-server` (Password Grant) |
-| API-Dokumentation | OpenAPI/Swagger (`zircote/swagger-php`) |
-| Logging | Monolog (PSR-3) |
-| Event-Bus | Symfony EventDispatcher (PSR-14) |
-| Nachrichtenwarteschlange | DB-gestützt, über `enqueue/dbal` |
-| E-Mail-Versand | Symfony Mailer |
-| Cron | Yacron |
-| Containerisierung | Docker + Docker Compose |
-| Tests/Statische Analyse | PHPUnit 10, PHPStan, PHPCS, PHPat (Architektur-Tests) |
+| Schicht                  | Technologie                                           |
+|--------------------------|-------------------------------------------------------|
+| Sprache                  | PHP 8.2                                               |
+| HTTP-Server              | Apache (im PHP-Container)                             |
+| ORM / Datenbank          | Doctrine ORM 2.x + MariaDB                            |
+| Schema-Migrationen       | Doctrine Migrations                                   |
+| Dependency Injection     | PHP-DI (Autowiring + Annotationen)                    |
+| HTTP-Routing             | Symfony Routing (über PSR-7-Adapter)                  |
+| HTTP-Nachrichten         | PSR-7 (Guzzle-Implementierung)                        |
+| OAuth2                   | `league/oauth2-server` (Password Grant)               |
+| API-Dokumentation        | OpenAPI/Swagger (`zircote/swagger-php`)               |
+| Logging                  | Monolog (PSR-3)                                       |
+| Event-Bus                | Symfony EventDispatcher (PSR-14)                      |
+| Nachrichtenwarteschlange | DB-gestützt, über `enqueue/dbal`                      |
+| E-Mail-Versand           | Symfony Mailer                                        |
+| Cron                     | Yacron                                                |
+| Containerisierung        | Docker + Docker Compose                               |
+| Tests/Statische Analyse  | PHPUnit 10, PHPStan, PHPCS, PHPat (Architektur-Tests) |
 
 **Modulstruktur und Schichtung.** Der Code ist nicht nach technischen Schichten, sondern nach fachlichen
 Bereichen in sogenannte *vertikale Module* gegliedert: `Main` (Skeleton-Kern: Bootstrap, Exception-Handling,
@@ -104,7 +105,8 @@ flowchart TD
     CTRL --> RESP["JSON-Antwort (PSR-7)"]
 ```
 
-*Abbildung 3.1: Anfrageverarbeitung im alten PHP-Backend (eigene Darstellung nach `ARCHITECTURE.md`).*
+*Abbildung 3.1: Anfrageverarbeitung im alten PHP-Backend (eigene Darstellung nach Quellcode-Analyse des
+`HttpDispatcher` und der Middleware-Kette).*
 
 **Domänenmodell.** Abbildung 3.2 zeigt die zentralen Entitäten und ihre Beziehungen. `BaseUser` ist eine
 abstrakte Basis-Entität, von der `Admin` und `User` per *Single Table Inheritance* (STI) erben — beide
@@ -123,22 +125,22 @@ unerwartete Vererbung zu verhindern.
 
 ```mermaid
 erDiagram
-    BaseUser ||--o{ UserGroup : "gehört zu (n:m)"
-    UserGroup ||--o{ DesktopGroup : "verknüpft mit (n:m)"
-    DesktopGroup ||--o{ Desktop : "enthält (n:m)"
-    EndpointGroup ||--o{ Endpoint : "enthält"
-    BaseUser ||--o{ EndpointUserAccess : "direkte Regel"
-    UserGroup ||--o{ EndpointUserGroupAccess : "Gruppenregel"
-    BaseUser ||--o{ EndpointGroupUserAccess : "Regel je Endpunktgruppe"
-    UserGroup ||--o{ EndpointGroupUserGroupAccess : "Gruppenregel je Endpunktgruppe"
-    EndpointUserAccess }o--|| Endpoint : "bezieht sich auf"
-    EndpointUserGroupAccess }o--|| Endpoint : "bezieht sich auf"
-    EndpointGroupUserAccess }o--|| EndpointGroup : "bezieht sich auf"
-    EndpointGroupUserGroupAccess }o--|| EndpointGroup : "bezieht sich auf"
+    BaseUser ||--o{ UserGroup: "gehört zu (n:m)"
+    UserGroup ||--o{ DesktopGroup: "verknüpft mit (n:m)"
+    DesktopGroup ||--o{ Desktop: "enthält (n:m)"
+    EndpointGroup ||--o{ Endpoint: "enthält"
+    BaseUser ||--o{ EndpointUserAccess: "direkte Regel"
+    UserGroup ||--o{ EndpointUserGroupAccess: "Gruppenregel"
+    BaseUser ||--o{ EndpointGroupUserAccess: "Regel je Endpunktgruppe"
+    UserGroup ||--o{ EndpointGroupUserGroupAccess: "Gruppenregel je Endpunktgruppe"
+    EndpointUserAccess }o--|| Endpoint: "bezieht sich auf"
+    EndpointUserGroupAccess }o--|| Endpoint: "bezieht sich auf"
+    EndpointGroupUserAccess }o--|| EndpointGroup: "bezieht sich auf"
+    EndpointGroupUserGroupAccess }o--|| EndpointGroup: "bezieht sich auf"
 ```
 
-*Abbildung 3.2: Domänenmodell des alten PHP-Backends (eigene Darstellung nach `ARCHITECTURE.md`, Abschnitt
-6). `BaseUser` wird per Single-Table-Inheritance in `Admin` und `User` spezialisiert (hier aus
+*Abbildung 3.2: Domänenmodell des alten PHP-Backends (eigene Darstellung nach den Doctrine-Entitätsklassen).
+`BaseUser` wird per Single-Table-Inheritance in `Admin` und `User` spezialisiert (hier aus
 Platzgründen nicht gesondert dargestellt).*
 
 **Berechtigungsmodell (Permissions-Engine).** Über die reine OAuth2-Unterscheidung zwischen den Scopes
@@ -162,35 +164,35 @@ authentifizierte Nutzer über seine Nutzergruppe mit einer Desktop-Gruppe verkn�
 angefragten Desktop enthält.
 
 **Vollständige Schnittstelle (Ist-Zustand).** Tabelle 3.2 listet alle vom alten Backend bereitgestellten
-Endpunkte auf, wie sie in `ARCHITECTURE.md` dokumentiert sind. Diese Tabelle bildet die Grundlage für die
-funktionalen Anforderungen in Abschnitt 3.2, da jeder Endpunkt, den das alte Backend anbietet, vom neuen
-Backend in äquivalenter Form angeboten werden muss, damit Frontend und DaaS-Anwendung unverändert
-funktionieren.
+Endpunkte auf, wie sie sich aus den Routen-Attributen der Controller-Klassen ergeben. Diese Tabelle bildet
+die Grundlage für die funktionalen Anforderungen in Abschnitt 3.2, da jeder Endpunkt, den das alte Backend
+anbietet, vom neuen Backend in äquivalenter Form angeboten werden muss, damit Frontend und DaaS-Anwendung
+unverändert funktionieren.
 
 *Tabelle 3.2: API-Endpunkte des alten PHP-Backends (Ist-Zustand)*
 
-| Modul | Methode | Pfad | Berechtigung | Beschreibung |
-|---|---|---|---|---|
-| Main | GET | `/version` | keine | Anwendungsversion |
-| OAuth2 | POST | `/oauth2/user/token` | keine | Zugriffstoken anfordern (Password/Refresh Grant) |
-| OAuth2 | GET | `/oauth2/user/session` | user/admin | Session-Info |
-| OAuth2 | GET | `/ping/user` \| `/ping/admin` | user/admin | Diagnose-Endpunkt |
-| User | POST | `/user` | keine | Nutzer registrieren |
-| User | GET | `/users` | admin | Nutzer auflisten (paginiert) |
-| User | GET/PATCH/DELETE | `/user/{id}` | admin | Nutzer lesen/ändern/löschen |
-| User | POST | `/user/{id}/enable` \| `/disable` | admin | Nutzerkonto (de)aktivieren |
-| User | POST | `/user/validate_email` | keine | E-Mail-Adresse verifizieren |
-| User | GET | `/users/access/{desktopId}` | user | Desktop-Zugriff prüfen |
-| User | POST | `/user/request-application/{app}/{lang}` | user | Anwendungsfreischaltung anfragen (E-Mail) |
-| Admin | GET | `/admins`, `/admin/{id}` | admin | Admins auflisten/lesen |
-| Admin | POST/DELETE | `/admin`, `/admin/{id}` | admin | Admin anlegen/löschen |
-| Desktop | POST/GET | `/desktop`, `/desktop/{id}`, `/desktops` | admin | Desktop anlegen/lesen/auflisten |
-| Desktop | POST/GET | `/desktop-group`, `/desktop_group/{id}` | admin | Desktop-Gruppe anlegen/lesen |
-| Desktop | POST | `/desktop_group/{dgId}/user_group/{ugId}` | admin | Nutzergruppe mit Desktop-Gruppe verknüpfen |
-| Permissions | GET | `/permissions/{fn}/{userId}` | admin | Berechtigung für Nutzer/Funktion abfragen |
-| Permissions | POST | `/permissions_info` | token/admin | Berechtigung anhand Token + Funktionsname abfragen |
-| UserGroup | diverse | `/user-group/*` | admin | CRUD für Nutzergruppen |
-| EndpointGroup | diverse | `/endpoint-group/*` | admin | CRUD für Endpunktgruppen |
+| Modul         | Methode          | Pfad                                      | Berechtigung | Beschreibung                                       |
+|---------------|------------------|-------------------------------------------|--------------|----------------------------------------------------|
+| Main          | GET              | `/version`                                | keine        | Anwendungsversion                                  |
+| OAuth2        | POST             | `/oauth2/user/token`                      | keine        | Zugriffstoken anfordern (Password/Refresh Grant)   |
+| OAuth2        | GET              | `/oauth2/user/session`                    | user/admin   | Session-Info                                       |
+| OAuth2        | GET              | `/ping/user` \| `/ping/admin`             | user/admin   | Diagnose-Endpunkt                                  |
+| User          | POST             | `/user`                                   | keine        | Nutzer registrieren                                |
+| User          | GET              | `/users`                                  | admin        | Nutzer auflisten (paginiert)                       |
+| User          | GET/PATCH/DELETE | `/user/{id}`                              | admin        | Nutzer lesen/ändern/löschen                        |
+| User          | POST             | `/user/{id}/enable` \| `/disable`         | admin        | Nutzerkonto (de)aktivieren                         |
+| User          | POST             | `/user/validate_email`                    | keine        | E-Mail-Adresse verifizieren                        |
+| User          | GET              | `/users/access/{desktopId}`               | user         | Desktop-Zugriff prüfen                             |
+| User          | POST             | `/user/request-application/{app}/{lang}`  | user         | Anwendungsfreischaltung anfragen (E-Mail)          |
+| Admin         | GET              | `/admins`, `/admin/{id}`                  | admin        | Admins auflisten/lesen                             |
+| Admin         | POST/DELETE      | `/admin`, `/admin/{id}`                   | admin        | Admin anlegen/löschen                              |
+| Desktop       | POST/GET         | `/desktop`, `/desktop/{id}`, `/desktops`  | admin        | Desktop anlegen/lesen/auflisten                    |
+| Desktop       | POST/GET         | `/desktop-group`, `/desktop_group/{id}`   | admin        | Desktop-Gruppe anlegen/lesen                       |
+| Desktop       | POST             | `/desktop_group/{dgId}/user_group/{ugId}` | admin        | Nutzergruppe mit Desktop-Gruppe verknüpfen         |
+| Permissions   | GET              | `/permissions/{fn}/{userId}`              | admin        | Berechtigung für Nutzer/Funktion abfragen          |
+| Permissions   | POST             | `/permissions_info`                       | token/admin  | Berechtigung anhand Token + Funktionsname abfragen |
+| UserGroup     | diverse          | `/user-group/*`                           | admin        | CRUD für Nutzergruppen                             |
+| EndpointGroup | diverse          | `/endpoint-group/*`                       | admin        | CRUD für Endpunktgruppen                           |
 
 **Konfiguration und Betrieb.** Sämtliche Konfiguration erfolgt über Umgebungsvariablen, die beim
 Containerstart in den Dependency-Injection-Container abgebildet werden; ein direkter Zugriff auf
@@ -218,14 +220,14 @@ Rahmenbedingungen für das neue Backend zusammen.
 
 *Tabelle 3.3: Umfeld und Rahmenbedingungen*
 
-| Umfeldelement | Beschreibung | Auswirkung auf das neue Backend |
-|---|---|---|
-| MariaDB | Alleiniger Datenspeicher des alten Backends (Nutzer, Gruppen, Permissions, Desktops) | Muss als Datenspeicher weiterverwendet werden, Schema muss versioniert migrierbar bleiben |
-| SMTP-Relay | Versand von Registrierungs-/Verifikations-E-Mails im alten Backend über Symfony Mailer + DB-Warteschlange | Muss weiterhin HTML-E-Mails für dieselben Anlässe versenden können |
-| React-Frontend | Eigenständiges Repository, konsumiert Auth-/User-/Desktop-Endpunkte des Backends | Erwartet unveränderte REST-Verträge (Abschnitt 3.1.2); CORS-Konfiguration muss Frontend-Origin erlauben |
-| Python-DaaS-Anwendung | Eigenständiges Repository, konsumiert ausschließlich die Permissions-Endpunkte | Erwartet unveränderten Permissions-Vertrag inkl. 4-stufiger Kaskade |
-| Docker/Docker Compose | Alleinige Betriebsform des alten Backends (Entwicklungs- und Testumgebung als separate Profile) | Neues Backend muss ebenfalls containerisiert und per Docker betreibbar sein |
-| Linux-Zielplattform | Produktionsbetrieb des alten Backends auf Linux-Servern mit Apache | Neues Backend muss ohne Anpassung auf vergleichbarer Linux-Infrastruktur lauffähig sein |
+| Umfeldelement         | Beschreibung                                                                                              | Auswirkung auf das neue Backend                                                                         |
+|-----------------------|-----------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
+| MariaDB               | Alleiniger Datenspeicher des alten Backends (Nutzer, Gruppen, Permissions, Desktops)                      | Muss als Datenspeicher weiterverwendet werden, Schema muss versioniert migrierbar bleiben               |
+| SMTP-Relay            | Versand von Registrierungs-/Verifikations-E-Mails im alten Backend über Symfony Mailer + DB-Warteschlange | Muss weiterhin HTML-E-Mails für dieselben Anlässe versenden können                                      |
+| React-Frontend        | Eigenständiges Repository, konsumiert Auth-/User-/Desktop-Endpunkte des Backends                          | Erwartet unveränderte REST-Verträge (Abschnitt 3.1.2); CORS-Konfiguration muss Frontend-Origin erlauben |
+| Python-DaaS-Anwendung | Eigenständiges Repository, konsumiert ausschließlich die Permissions-Endpunkte                            | Erwartet unveränderten Permissions-Vertrag inkl. 4-stufiger Kaskade                                     |
+| Docker/Docker Compose | Alleinige Betriebsform des alten Backends (Entwicklungs- und Testumgebung als separate Profile)           | Neues Backend muss ebenfalls containerisiert und per Docker betreibbar sein                             |
+| Linux-Zielplattform   | Produktionsbetrieb des alten Backends auf Linux-Servern mit Apache                                        | Neues Backend muss ohne Anpassung auf vergleichbarer Linux-Infrastruktur lauffähig sein                 |
 
 Beide bestehenden Clients (Frontend, DaaS-Anwendung) liegen außerhalb des Scopes dieser Arbeit (Kapitel 1,
 Abgrenzung) und werden nicht angepasst; jede hier beschriebene Rahmenbedingung ist daher als feste,
@@ -235,8 +237,8 @@ nicht verhandelbare Vorgabe zu verstehen und nicht als Gestaltungsspielraum für
 
 ### 3.2.1 Vorgehen
 
-Die Anforderungen wurden ausschließlich durch Quellcode- und Dokumentationsanalyse des alten PHP-Backends
-(`ARCHITECTURE.md`, `SKELETON.md`, `composer.json`, siehe Abschnitt 3.1.3) sowie durch die
+Die Anforderungen wurden ausschließlich durch Quellcode-Analyse des alten PHP-Backends (Controller-, Service-
+und Entitätsklassen, Migrationsskripte, `composer.json`, siehe Abschnitt 3.1.3) sowie durch die
 Aufgabenstellung der Ausschreibung ermittelt. Eine gesonderte Gesprächsreihe mit dem Betreuer zur
 Anforderungsklärung hat über die in Abschnitt 3.3 genannten, fest vorgegebenen Abgabetermine hinaus nicht
 stattgefunden; die Anforderungen stützen sich daher ausschließlich auf die Ausschreibung und die Analyse
@@ -249,8 +251,8 @@ beobachtbaren Verhalten eines bestehenden Systems rekonstruiert, dessen Ablösun
 Die Hauptfunktionalität des Backends lässt sich aus der Modulstruktur des alten Systems (Abschnitt 3.1.3)
 in vier Bereiche gliedern, die vom neuen Backend unverändert angeboten werden müssen:
 
-1. **Authentifizierung** — Ausstellen, Erneuern, Widerrufen und Prüfen von Zugriffstoken für Nutzer
-   (vormals `OAuth2`-Modul).
+1. **Authentifizierung** — Ausstellen, Erneuern, Widerrufen und Prüfen von Zugriffstoken für Nutzer (vormals `OAuth2`
+   -Modul).
 2. **Autorisierung** — Beantwortung der Frage „darf Nutzer X Funktion Y aufrufen?" über die in Abschnitt
    3.1.3 beschriebene 4-stufige Kaskade (vormals `Permissions`-Modul).
 3. **Benutzerverwaltung** — Selbstregistrierung mit E-Mail-Verifikation, administrative Verwaltung von
@@ -276,26 +278,26 @@ Framework dies geschieht.
 
 *Tabelle 3.4: Funktionale Anforderungen (FA)*
 
-| ID | Anforderung | Quelle (altes Backend) |
-|---|---|---|
-| FA-1 | Ein Nutzer authentifiziert sich mit Benutzername und Passwort und erhält im Erfolgsfall ein Zugriffstoken (`POST /oauth2/user/token`, Password Grant) | `league/oauth2-server` Password Grant |
-| FA-2 | Ein abgelaufenes Zugriffstoken kann ohne erneute Eingabe von Zugangsdaten über ein Refresh-Token erneuert werden | OAuth2-Modul, Refresh-Token-Mechanismus |
-| FA-3 | Ein Nutzer kann sich aktiv abmelden; das zugehörige Token wird serverseitig widerrufen, auch wenn es formal noch nicht abgelaufen ist (`POST /oauth2/user/logout`) | OAuth2-Modul |
-| FA-4 | Zu einem gültigen Zugriffstoken kann die zugehörige Session/Identität abgefragt werden (`GET /oauth2/user/session`) | OAuth2-Modul |
-| FA-5 | Ein neuer Nutzer kann sich selbst registrieren und muss seine E-Mail-Adresse über einen zeitlich begrenzten Code bestätigen, bevor das Konto nutzbar ist (`POST /user`, `/user/validate_email`, `/user/resend_code`) | User-Modul, `registrationCode` (24 h TTL) |
-| FA-6 | Ein Administrator kann Nutzer auflisten (paginiert), einsehen, ändern sowie aktivieren/deaktivieren (`GET /users`, `GET/PATCH /user/{id}`, `POST /user/{id}/enable`\|`/disable`) | User-Modul |
-| FA-7 | Ein Administrator kann weitere Administratorkonten anlegen, auflisten und löschen (`GET /admins`, `POST /admin`, `DELETE /admin/{id}`) | Admin-Modul |
-| FA-8 | Ein Administrator kann Nutzergruppen anlegen, auflisten und ändern (`/user-group/*`) | UserGroup-Modul |
-| FA-9 | Ein Nutzer kann die Freischaltung einer bestimmten Anwendung anfragen; der zuständige Administrator wird per E-Mail benachrichtigt (`POST /user/request-application/{application}/{isoCode}`) | User-Modul |
-| FA-10 | Ein Administrator kann Desktops anlegen, einsehen und auflisten (`POST /desktop`, `GET /desktop/{id}`, `GET /desktops`) | Desktop-Modul |
-| FA-11 | Ein Administrator kann Desktop-Gruppen anlegen, einsehen und mit Nutzergruppen verknüpfen (`POST /desktop-group`, `GET /desktop_group/{id}`, `POST /desktop_group/{id}/user_group/{userGroupId}`) | Desktop-Modul |
-| FA-12 | Ein Nutzer kann prüfen, ob er Zugriff auf einen bestimmten Desktop hat (über seine Nutzergruppen-/Desktop-Gruppen-Zuordnung, `GET /users/access/{desktopId}`) | User-Modul |
-| FA-13 | Für eine gegebene Funktion und einen gegebenen Nutzer kann geprüft werden, ob Zugriff erlaubt ist, über die 4-stufige Kaskade aus Abschnitt 3.1.3 (`GET /permissions/{functionName}/{userId}`, `POST /permissions_info`) | Permissions-Modul |
+| ID    | Anforderung                                                                                                                                                                                                              | Quelle (altes Backend)                    |
+|-------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------|
+| FA-1  | Ein Nutzer authentifiziert sich mit Benutzername und Passwort und erhält im Erfolgsfall ein Zugriffstoken (`POST /oauth2/user/token`, Password Grant)                                                                    | `league/oauth2-server` Password Grant     |
+| FA-2  | Ein abgelaufenes Zugriffstoken kann ohne erneute Eingabe von Zugangsdaten über ein Refresh-Token erneuert werden                                                                                                         | OAuth2-Modul, Refresh-Token-Mechanismus   |
+| FA-3  | Ein Nutzer kann sich aktiv abmelden; das zugehörige Token wird serverseitig widerrufen, auch wenn es formal noch nicht abgelaufen ist (`POST /oauth2/user/logout`)                                                       | OAuth2-Modul                              |
+| FA-4  | Zu einem gültigen Zugriffstoken kann die zugehörige Session/Identität abgefragt werden (`GET /oauth2/user/session`)                                                                                                      | OAuth2-Modul                              |
+| FA-5  | Ein neuer Nutzer kann sich selbst registrieren und muss seine E-Mail-Adresse über einen zeitlich begrenzten Code bestätigen, bevor das Konto nutzbar ist (`POST /user`, `/user/validate_email`, `/user/resend_code`)     | User-Modul, `registrationCode` (24 h TTL) |
+| FA-6  | Ein Administrator kann Nutzer auflisten (paginiert), einsehen, ändern sowie aktivieren/deaktivieren (`GET /users`, `GET/PATCH /user/{id}`, `POST /user/{id}/enable`\|`/disable`)                                         | User-Modul                                |
+| FA-7  | Ein Administrator kann weitere Administratorkonten anlegen, auflisten und löschen (`GET /admins`, `POST /admin`, `DELETE /admin/{id}`)                                                                                   | Admin-Modul                               |
+| FA-8  | Ein Administrator kann Nutzergruppen anlegen, auflisten und ändern (`/user-group/*`)                                                                                                                                     | UserGroup-Modul                           |
+| FA-9  | Ein Nutzer kann die Freischaltung einer bestimmten Anwendung anfragen; der zuständige Administrator wird per E-Mail benachrichtigt (`POST /user/request-application/{application}/{isoCode}`)                            | User-Modul                                |
+| FA-10 | Ein Administrator kann Desktops anlegen, einsehen und auflisten (`POST /desktop`, `GET /desktop/{id}`, `GET /desktops`)                                                                                                  | Desktop-Modul                             |
+| FA-11 | Ein Administrator kann Desktop-Gruppen anlegen, einsehen und mit Nutzergruppen verknüpfen (`POST /desktop-group`, `GET /desktop_group/{id}`, `POST /desktop_group/{id}/user_group/{userGroupId}`)                        | Desktop-Modul                             |
+| FA-12 | Ein Nutzer kann prüfen, ob er Zugriff auf einen bestimmten Desktop hat (über seine Nutzergruppen-/Desktop-Gruppen-Zuordnung, `GET /users/access/{desktopId}`)                                                            | User-Modul                                |
+| FA-13 | Für eine gegebene Funktion und einen gegebenen Nutzer kann geprüft werden, ob Zugriff erlaubt ist, über die 4-stufige Kaskade aus Abschnitt 3.1.3 (`GET /permissions/{functionName}/{userId}`, `POST /permissions_info`) | Permissions-Modul                         |
 
 Im Vergleich zum ersten Entwurf dieses Kapitels wurde FA-12 (Desktop-Zugriffsprüfung für Nutzer,
-`GET /users/access/{desktopId}`) ergänzt, da dieser Endpunkt in `ARCHITECTURE.md` separat vom allgemeinen
-Permissions-Endpunkt dokumentiert ist und eine eigene, Desktop-Gruppen-basierte Prüflogik besitzt, die nicht
-mit der generischen Funktions-/Endpunkt-Kaskade (FA-13) verwechselt werden darf.
+`GET /users/access/{desktopId}`) ergänzt, da dieser Endpunkt im `User`-Controller des alten Backends separat
+vom allgemeinen Permissions-Endpunkt implementiert ist und eine eigene, Desktop-Gruppen-basierte Prüflogik
+besitzt, die nicht mit der generischen Funktions-/Endpunkt-Kaskade (FA-13) verwechselt werden darf.
 
 ### 3.2.4 Ableitung der nicht-funktionalen Anforderungen
 
@@ -308,18 +310,18 @@ alten — wart- und testbar sein (NFA-8 bis NFA-10).
 
 *Tabelle 3.5: Nicht-funktionale Anforderungen (NFA)*
 
-| ID | Anforderung | Begründung |
-|---|---|---|
-| NFA-1 | Fail-closed-Sicherheitsverhalten: Ein unbekannter Nutzer, eine unbekannte Funktion oder das Fehlen jeder passenden Regel führt stets zu Zugriffsverweigerung, nie zu impliziter Erlaubnis | Übernahme des Sicherheitsprinzips aus dem alten Backend (Abschnitt 3.1.3) |
-| NFA-2 | Verhaltenskompatibilität der Berechtigungskaskade: identische Priorität (direkte Nutzerregel vor Gruppenregel vor Endpunktgruppenregel) und identische Konfliktauflösung bei mehreren gleichrangigen, widersprüchlichen Regeln wie im alten Backend | Die DaaS-Anwendung verlässt sich auf dieses Verhalten und wird nicht angepasst |
-| NFA-3 | API-Formkompatibilität: identische Pfade, HTTP-Methoden, JSON-Feldnamen und Statuscodes zu Frontend und DaaS-Anwendung wie beim alten Backend | Beide Clients werden nicht angepasst (Kapitel 1, Abgrenzung) |
-| NFA-4 | Passwörter werden ausschließlich als Hash gespeichert; Konten werden nach wiederholten Fehlversuchen vorübergehend gesperrt | Sicherheit (Kapitel 2.2) |
-| NFA-5 | Sicherheitsrelevante Endpunkte (insbesondere Login, Registrierung) sind ratenbegrenzt | Schutz vor Missbrauch/Brute-Force (Kapitel 2.2) |
-| NFA-6 | Zugriffstoken sind serverseitig widerrufbar, obwohl sie als JSON Web Token grundsätzlich zustandslos und selbstbeschreibend sind | Ein Logout oder eine erzwungene Abmeldung durch einen Administrator muss sofort wirksam werden (Kapitel 2.2) |
-| NFA-7 | Der Dienst ist zustandslos und damit horizontal skalierbar; es existiert kein Server-seitiger Session-State außerhalb der Datenbank | Betriebsfähigkeit hinter einem Load Balancer |
-| NFA-8 | Die Schichtenarchitektur jedes fachlichen Moduls (Controller → Service → Repository → Model) wird automatisiert über den Build geprüft, nicht nur durch Konvention | Wartbarkeit; direkte Antwort auf die in der Ausschreibung kritisierte Qualität des alten Backends |
-| NFA-9 | Eine Mindest-Testabdeckung wird im Build erzwungen und ein fehlgeschlagener Build verhindert das Mergen von Änderungen | Wartbarkeit/Qualitätssicherung |
-| NFA-10 | Das Datenbankschema wird ausschließlich über versionierte, nachvollziehbare Migrationen verändert und nie automatisch aus dem Code generiert | Nachvollziehbarkeit/Reproduzierbarkeit über Umgebungen hinweg |
+| ID     | Anforderung                                                                                                                                                                                                                                         | Begründung                                                                                                   |
+|--------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------|
+| NFA-1  | Fail-closed-Sicherheitsverhalten: Ein unbekannter Nutzer, eine unbekannte Funktion oder das Fehlen jeder passenden Regel führt stets zu Zugriffsverweigerung, nie zu impliziter Erlaubnis                                                           | Übernahme des Sicherheitsprinzips aus dem alten Backend (Abschnitt 3.1.3)                                    |
+| NFA-2  | Verhaltenskompatibilität der Berechtigungskaskade: identische Priorität (direkte Nutzerregel vor Gruppenregel vor Endpunktgruppenregel) und identische Konfliktauflösung bei mehreren gleichrangigen, widersprüchlichen Regeln wie im alten Backend | Die DaaS-Anwendung verlässt sich auf dieses Verhalten und wird nicht angepasst                               |
+| NFA-3  | API-Formkompatibilität: identische Pfade, HTTP-Methoden, JSON-Feldnamen und Statuscodes zu Frontend und DaaS-Anwendung wie beim alten Backend                                                                                                       | Beide Clients werden nicht angepasst (Kapitel 1, Abgrenzung)                                                 |
+| NFA-4  | Passwörter werden ausschließlich als Hash gespeichert; Konten werden nach wiederholten Fehlversuchen vorübergehend gesperrt                                                                                                                         | Sicherheit (Kapitel 2.2)                                                                                     |
+| NFA-5  | Sicherheitsrelevante Endpunkte (insbesondere Login, Registrierung) sind ratenbegrenzt                                                                                                                                                               | Schutz vor Missbrauch/Brute-Force (Kapitel 2.2)                                                              |
+| NFA-6  | Zugriffstoken sind serverseitig widerrufbar, obwohl sie als JSON Web Token grundsätzlich zustandslos und selbstbeschreibend sind                                                                                                                    | Ein Logout oder eine erzwungene Abmeldung durch einen Administrator muss sofort wirksam werden (Kapitel 2.2) |
+| NFA-7  | Der Dienst ist zustandslos und damit horizontal skalierbar; es existiert kein Server-seitiger Session-State außerhalb der Datenbank                                                                                                                 | Betriebsfähigkeit hinter einem Load Balancer                                                                 |
+| NFA-8  | Die Schichtenarchitektur jedes fachlichen Moduls (Controller → Service → Repository → Model) wird automatisiert über den Build geprüft, nicht nur durch Konvention                                                                                  | Wartbarkeit; direkte Antwort auf die in der Ausschreibung kritisierte Qualität des alten Backends            |
+| NFA-9  | Eine Mindest-Testabdeckung wird im Build erzwungen und ein fehlgeschlagener Build verhindert das Mergen von Änderungen                                                                                                                              | Wartbarkeit/Qualitätssicherung                                                                               |
+| NFA-10 | Das Datenbankschema wird ausschließlich über versionierte, nachvollziehbare Migrationen verändert und nie automatisch aus dem Code generiert                                                                                                        | Nachvollziehbarkeit/Reproduzierbarkeit über Umgebungen hinweg                                                |
 
 Die Reihenfolge NFA-1 bis NFA-3 ist bewusst gewählt: Sie bilden zusammen die Bedingung, unter der das neue
 Backend als „funktional gleichwertig" zum alten gelten darf, und sind damit die Messlatte für die in Kapitel
@@ -345,21 +347,21 @@ Abfolge der Arbeitspakete AP1–AP6 geplant, wie sie in der Ausschreibung vorgeg
 
 Eigene Meilensteine (strikt sequenzielle Abfolge AP1–AP6):
 
-| Meilenstein | Zeitraum |
-|---|---|
-| AP1 – Recherche Gesamtsystem DESIGN | 22.06.–29.06.2026 |
-| Abgabe der Anforderungsanalyse an den Betreuer | 29.06.2026 |
-| AP2 – Analyse altes PHP-Backend | 30.06.–13.07.2026 |
-| AP3 – Entwurf neues Backend (Konzept/Architektur) | 14.07.–03.08.2026 |
-| AP4 – Implementierung neues Backend (Java/Spring Boot) | 04.08.–21.09.2026 |
-| AP5 – Aufbau des Demonstrators | 22.09.–05.10.2026 |
-| AP6 – Test, Evaluation, Dokumentation | 06.10.–28.10.2026 |
+| Meilenstein                                                | Zeitraum                      |
+|------------------------------------------------------------|-------------------------------|
+| AP1 – Recherche Gesamtsystem DESIGN                        | 22.06.–29.06.2026             |
+| Abgabe der Anforderungsanalyse an den Betreuer             | 29.06.2026                    |
+| AP2 – Analyse altes PHP-Backend                            | 30.06.–13.07.2026             |
+| AP3 – Entwurf neues Backend (Konzept/Architektur)          | 14.07.–03.08.2026             |
+| AP4 – Implementierung neues Backend (Java/Spring Boot)     | 04.08.–21.09.2026             |
+| AP5 – Aufbau des Demonstrators                             | 22.09.–05.10.2026             |
+| AP6 – Test, Evaluation, Dokumentation                      | 06.10.–28.10.2026             |
 | Literaturrecherche / Kapitel 2 (theoretischer Hintergrund) | 22.06.–10.08.2026, begleitend |
-| Anfertigung der schriftlichen Ausarbeitung | 22.06.–11.11.2026, begleitend |
-| Abgabe des Entwurfs der Ausarbeitung an den Betreuer | 28.10.2026 |
-| Einarbeiten der Vorschläge des Betreuers | 28.10.–11.11.2026 |
-| Abgabe des vollständigen schriftlichen Entwurfs | 11.11.2026 |
-| Ende der Bearbeitungszeit, Einreichen im Prüfungsamt | 25.11.2026 |
+| Anfertigung der schriftlichen Ausarbeitung                 | 22.06.–11.11.2026, begleitend |
+| Abgabe des Entwurfs der Ausarbeitung an den Betreuer       | 28.10.2026                    |
+| Einarbeiten der Vorschläge des Betreuers                   | 28.10.–11.11.2026             |
+| Abgabe des vollständigen schriftlichen Entwurfs            | 11.11.2026                    |
+| Ende der Bearbeitungszeit, Einreichen im Prüfungsamt       | 25.11.2026                    |
 
 AP1 und AP2 überschneiden sich bewusst in den ersten beiden Wochen, da das Verständnis des Gesamtsystems
 DESIGN (AP1) und die Detailanalyse des alten Backends (AP2) in der Praxis nicht vollständig trennbar sind —
@@ -388,8 +390,8 @@ durch eine dedizierte ArchUnit-Testklasse automatisiert geprüft (Abschnitt 3.4.
 
 ```mermaid
 flowchart TB
-    FE["Frontend (React, unverändert)"] -- "REST — gleiche Endpunkte/Feldformate" --> BE
-    DAAS["DaaS-Anwendung (Python, unverändert)"] -- "REST — gleicher Permissions-Vertrag" --> BE
+    FE["Frontend (React, unverändert)"] -- " REST — gleiche Endpunkte/Feldformate " --> BE
+    DAAS["DaaS-Anwendung (Python, unverändert)"] -- " REST — gleicher Permissions-Vertrag " --> BE
     ADMIN["Admin (Swagger UI, SCOPE_admin)"] --> BE
     subgraph BE["Neues Backend — Java 21 / Spring Boot"]
         direction LR
@@ -398,13 +400,13 @@ flowchart TB
         USER["user"]
         DESK["desktop"]
     end
-    BE -. "Querschnitt: shared, config, bootstrap\nSchichtung je Modul durch ArchUnit erzwungen" .- BE
+    BE -. " Querschnitt: shared, config, bootstrap\nSchichtung je Modul durch ArchUnit erzwungen " . - BE 
     BE --> DB[("MariaDB\nSchema über Flyway migriert")]
-    BE --> SMTP["SMTP-Relay\nRegistrierungs-/Verifikations-E-Mails"]
+BE --> SMTP["SMTP-Relay\nRegistrierungs-/Verifikations-E-Mails"]
 ```
 
-*Abbildung 3.3 (Bild 3.2): Zielzustand des neuen Backends (eigene Darstellung nach `docs/ARC42.md`,
-Abschnitte 3.1/4 dieses Repositories).*
+*Abbildung 3.3: Zielzustand des neuen Backends (eigene Darstellung nach der im Rahmen dieser Arbeit
+entstandenen Paketstruktur `../../src/main/java/de/frauas/design/backend`).*
 
 ### 3.4.2 Authentifizierungs- und Autorisierungskonzept
 
@@ -413,10 +415,16 @@ Token-Aussteller validiert Benutzername und Passwort bzw. ein vorgelegtes Refres
 Erfolgsfall ein JWT aus, dessen Signatur über ein beim ersten Start erzeugtes und persistiertes
 RSA-Schlüsselpaar geprüft werden kann — ein Verlust dieses Schlüssels entwertet alle zuvor ausgestellten
 Tokens. Damit ein an sich zustandsloses Token dennoch, wie in NFA-6 gefordert, serverseitig widerrufen werden
-kann, führt das Zielsystem zwei Datenbanktabellen (`access_tokens`, `refresh_tokens`) mit einem
-`revoked`/`revoked_at`-Feld, die bei jeder Prüfung eines Tokens zusätzlich zur kryptografischen Signatur
-konsultiert werden; diese Tabellen sind bewusst so benannt und strukturiert, dass sie die entsprechende
-Tabelle des alten Backends (`oauth2_access_token`) nachbilden. Autorisierung erfolgt zweistufig: Grobgranular
+kann, führt das Zielsystem zwei Datenbanktabellen (`access_tokens`, `refresh_tokens`, definiert in der
+Flyway-Migration `V1__init.sql`) mit je einem `revoked`-Flag und einem `revoked_at`-Zeitstempel, die bei
+jeder Prüfung eines Tokens zusätzlich zur kryptografischen Signatur konsultiert werden; `access_tokens`
+referenziert den Nutzer zusätzlich über ein eindeutiges `jti`-Feld, über das ein einzelnes Token gezielt
+widerrufen werden kann, ohne alle Tokens des Nutzers ungültig zu machen. Ergänzend begrenzt ein
+`RateLimitingFilter` (Paket `shared.security.filter`, auf Basis eines Token-Bucket-Algorithmus in
+`shared.security.ratelimit`) die Anzahl zulässiger Login- und Registrierungsversuche je Client-IP (NFA-5);
+die Nutzer-Entität selbst führt zusätzlich die Felder `failedLoginAttempts` und `lockedUntil`, über die ein
+Konto nach wiederholten Fehlversuchen vorübergehend gesperrt wird (NFA-4). Autorisierung erfolgt zweistufig:
+Grobgranular
 über OAuth2-Scopes (`SCOPE_user`/`SCOPE_admin`, geprüft durch Spring Security), feingranular über die in
 Abschnitt 3.1.3 beschriebene 4-stufige, fail-closed Kaskade, die im Zielsystem 1:1 aus dem alten
 `PermissionCalculationService` portiert wird und bei mehreren gleichrangigen, widersprüchlichen Regeln
@@ -426,9 +434,12 @@ Allow-Eintrag (vgl. NFA-2, Abschnitt 3.2.4).
 ### 3.4.3 Datenhaltung und Betrieb
 
 MariaDB dient, wie im alten Backend, als alleiniger Datenspeicher; das Schema wird jedoch ausschließlich
-über versionierte Flyway-Migrationsskripte verändert, während Hibernate die gemappten Entitäten beim
-Start lediglich gegen das bestehende Schema validiert, aber nie selbst Schemaänderungen vornimmt (NFA-10).
-Ein SMTP-Relay versendet, wie im alten Backend, Registrierungs- und Verifikations-E-Mails sowie
+über versionierte Flyway-Migrationsskripte unter `../../src/main/resources/db/migration` (`V1__init.sql` für das
+initiale Schema, gefolgt von inkrementellen Skripten wie `V2__registration_timestamps_to_instant.sql`,
+`V3__drop_desktop_name.sql` und `V4__desktop_group_description_only.sql`) verändert, während Hibernate die
+gemappten Entitäten beim Start lediglich gegen das bestehende Schema validiert (`ddl-auto: validate`), aber
+nie selbst Schemaänderungen vornimmt (NFA-10). Ein SMTP-Relay versendet, wie im alten Backend, Registrierungs- und
+Verifikations-E-Mails sowie
 Benachrichtigungen über angefragte Anwendungsfreischaltungen (FA-9), hier auf Basis von
 Thymeleaf-HTML-Vorlagen. Der Dienst ist als einzelnes Docker-Image paketiert (eine Spring-Boot-Fat-JAR), über
 Umgebungsvariablen konfigurierbar (12-Factor-Prinzip, mit separaten Profilen `local`/`dev`/`prod`) und hält
@@ -439,7 +450,8 @@ RSA-Schlüsselpaar und dieselbe Datenbank teilen.
 ### 3.4.4 Qualitätssicherung
 
 Die in NFA-8 und NFA-9 geforderte automatisierte Prüfung von Architektur und Testabdeckung wird im
-Zielsystem über zwei Build-Bausteine umgesetzt: ArchUnit-Tests prüfen bei jedem Build unter anderem, dass
+Zielsystem über zwei Build-Bausteine umgesetzt: Eine ArchUnit-Testklasse (`ArchitectureTest`,
+`../../src/test/java/de/frauas/design/backend/arch`) prüft bei jedem Build unter anderem, dass
 Controller nie direkt von anderen Controllern aufgerufen werden, dass Services nicht von Repositories
 abhängen, dass Entitäten (`model`) nur aus Service-, Repository-, Konfigurations- oder DTO-Code heraus
 referenziert werden, dass Klassen gemäß ihrer Spring-Annotation (`@Service`, `@Repository`,
@@ -458,19 +470,19 @@ anschließenden Beschreibungen legen für jeden Anwendungsfall Vorbedingung, Abl
 
 *Tabelle 3.6: Anwendungsfälle für den Prototyp*
 
-| # | Anwendungsfall | Beteiligte Module | Abgedeckte FA |
-|---|---|---|---|
-| 1 | Login per Password Grant und anschließende Berechtigungsprüfung durch die DaaS-Anwendung | auth, permission | FA-1, FA-13 |
-| 2 | Token-Erneuerung per Refresh-Token-Grant | auth | FA-2 |
-| 3 | Logout mit serverseitigem Tokenwiderruf | auth | FA-3 |
-| 4 | Selbstregistrierung inkl. E-Mail-Verifikation | user | FA-5 |
-| 5 | Admin legt Benutzer/Admin/Nutzergruppe an und (de)aktiviert Konten | user | FA-6, FA-7, FA-8 |
-| 6 | Admin legt Desktop und Desktop-Gruppe an und verknüpft sie mit einer Nutzergruppe | desktop | FA-10, FA-11 |
-| 7 | DaaS-Anwendung fragt für eine gegebene Funktion und einen Nutzer die Zugriffsentscheidung ab | permission | FA-13 |
-| 8 | Nutzer fragt Freischaltung einer Anwendung an (Benachrichtigungs-E-Mail an Admin) | user | FA-9 |
+| # | Anwendungsfall                                                                               | Beteiligte Module | Abgedeckte FA    |
+|---|----------------------------------------------------------------------------------------------|-------------------|------------------|
+| 1 | Login per Password Grant und anschließende Berechtigungsprüfung durch die DaaS-Anwendung     | auth, permission  | FA-1, FA-13      |
+| 2 | Token-Erneuerung per Refresh-Token-Grant                                                     | auth              | FA-2             |
+| 3 | Logout mit serverseitigem Tokenwiderruf                                                      | auth              | FA-3             |
+| 4 | Selbstregistrierung inkl. E-Mail-Verifikation                                                | user              | FA-5             |
+| 5 | Admin legt Benutzer/Admin/Nutzergruppe an und (de)aktiviert Konten                           | user              | FA-6, FA-7, FA-8 |
+| 6 | Admin legt Desktop und Desktop-Gruppe an und verknüpft sie mit einer Nutzergruppe            | desktop           | FA-10, FA-11     |
+| 7 | DaaS-Anwendung fragt für eine gegebene Funktion und einen Nutzer die Zugriffsentscheidung ab | permission        | FA-13            |
+| 8 | Nutzer fragt Freischaltung einer Anwendung an (Benachrichtigungs-E-Mail an Admin)            | user              | FA-9             |
 
-**AF-1 — Login und Berechtigungsprüfung.** *Vorbedingung:* Ein aktiviertes Nutzerkonto existiert.
-*Ablauf:* Der Nutzer meldet sich über das Frontend mit Benutzername und Passwort an; das Backend stellt ein
+**AF-1 — Login und Berechtigungsprüfung.** *Vorbedingung:* Ein aktiviertes Nutzerkonto existiert. *Ablauf:* Der Nutzer
+meldet sich über das Frontend mit Benutzername und Passwort an; das Backend stellt ein
 Zugriffs- und ein Refresh-Token aus. Der Nutzer löst daraufhin über das Frontend eine Aktion aus, die eine
 design-daas-Funktion betrifft; die DaaS-Anwendung fragt das Backend, ob der Nutzer diese Funktion aufrufen
 darf. *Nachbedingung:* Der Nutzer besitzt ein gültiges Token, und die DaaS-Anwendung erhält eine
@@ -495,8 +507,8 @@ sequenceDiagram
 
 *Abbildung 3.4: Ablauf von AF-1 (eigene Darstellung).*
 
-**AF-2 — Token-Erneuerung.** *Vorbedingung:* Ein gültiges, nicht widerrufenes Refresh-Token liegt vor.
-*Ablauf:* Das Frontend sendet das Refresh-Token an `POST /oauth2/user/token` mit `grant_type=refresh_token`,
+**AF-2 — Token-Erneuerung.** *Vorbedingung:* Ein gültiges, nicht widerrufenes Refresh-Token liegt vor. *Ablauf:* Das
+Frontend sendet das Refresh-Token an `POST /oauth2/user/token` mit `grant_type=refresh_token`,
 ohne dass der Nutzer erneut Zugangsdaten eingeben muss. *Nachbedingung:* Ein neues Zugriffstoken (und
 üblicherweise ein neues Refresh-Token) wird ausgestellt; das alte Zugriffstoken verliert seine Gültigkeit.
 
@@ -532,8 +544,8 @@ Backend durchläuft die 4-stufige Kaskade aus Abschnitt 3.1.3 und liefert eine e
 unklaren Fall (unbekannter Nutzer, unbekannte Funktion, keine passende Regel) wird aufgrund von NFA-1
 verweigert.
 
-**AF-8 — Anfrage einer Anwendungsfreischaltung.** *Vorbedingung:* Ein angemeldeter Nutzer ist vorhanden.
-*Ablauf:* Der Nutzer fragt über das Frontend die Freischaltung einer bestimmten Anwendung an
+**AF-8 — Anfrage einer Anwendungsfreischaltung.** *Vorbedingung:* Ein angemeldeter Nutzer ist vorhanden. *Ablauf:* Der
+Nutzer fragt über das Frontend die Freischaltung einer bestimmten Anwendung an
 (`POST /user/request-application/{application}/{isoCode}`); das Backend versendet eine Benachrichtigungs-
 E-Mail an die zuständigen Administratoren. *Nachbedingung:* Die Administratoren sind informiert und können
 die Freischaltung außerhalb des hier beschriebenen Anwendungsfalls über AF-5/AF-6 vornehmen.
@@ -552,7 +564,7 @@ die Freischaltung außerhalb des hier beschriebenen Anwendungsfalls über AF-5/A
 ```
 
 Beide Quellen sind Teil des vollständigen Literaturverzeichnisses in Kapitel 2. Alle übrigen Aussagen dieses
-Kapitels stützen sich auf die Ausschreibung (`docs/Ausschreibung_DaaS_Backend_DESIGN_2026.pdf`), den
-Quellcode und die Dokumentation des alten PHP-Backends (`design-daas-application-backend/ARCHITECTURE.md`,
-`SKELETON.md`) sowie die arc42-Dokumentation und den Quellcode des in dieser Arbeit entstandenen neuen
-Backends (`docs/ARC42.md` dieses Repositories).
+Kapitels stützen sich auf die offizielle Ausschreibung sowie auf die direkte Analyse des Quellcodes: des
+alten PHP-Backends (`design-daas-application-backend`, Abschnitt 3.1) und des im Rahmen dieser Arbeit
+entstandenen neuen Java-Backends (Abschnitt 3.4), jeweils einschließlich Konfigurationsdateien (`../../pom.xml`,
+`application.yml`), Datenbankmigrationen (`src/main/resources/db/migration`) und Testklassen (`src/test/java`).

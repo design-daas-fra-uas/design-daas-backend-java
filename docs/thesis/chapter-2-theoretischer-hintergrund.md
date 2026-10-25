@@ -527,7 +527,8 @@ wird; ist keine Regel vorhanden oder ist der Nutzer unbekannt, bleibt es bei der
 Bevor eine Java-Anwendung ausgeführt werden kann, müssen ihre Quelldateien kompiliert, ihre Abhängigkeiten
 aufgelöst und die Ergebnisse zu einem lauffähigen Artefakt (z. B. einer JAR-Datei) zusammengefügt werden. **Apache
 Maven** ist ein Build-Automatisierungs- und Projektmanagement-Werkzeug für das Java-Ökosystem, das
-diese Schritte deklarativ über eine zentrale Projektbeschreibungsdatei, die *Project Object Model*-Datei (`pom.xml`),
+diese Schritte deklarativ über eine zentrale Projektbeschreibungsdatei, die *Project Object Model*-Datei
+(`../../pom.xml`),
 steuert [33]. In dieser Datei werden unter anderem die benötigten Abhängigkeiten (Bibliotheken
 und deren Versionen) sowie zusätzliche *Plugins* für Spezialaufgaben (z. B. Testausführung, Code-Coverage-
 Messung) deklariert; Maven lädt diese Abhängigkeiten automatisch aus einem zentralen Repository herunter und

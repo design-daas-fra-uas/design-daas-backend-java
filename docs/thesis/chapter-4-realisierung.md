@@ -3,7 +3,7 @@
 > Status: Ausführlicher Entwurf, Grundlage für Diskussion/Ausbau. Ziel-Umfang laut Vorlage: 30–40 Seiten
 > für ein Masterthesis-Kapitel 4; dieser Entwurf ist bewusst ausführlicher gehalten (Code-Erklärungen und
 > Begründungen), damit er direkt als Textgrundlage dient. Alle Codeausschnitte sind **kurz** (Vorlage-Regel:
-> kein vollständiger Quellcode-Abdruck) und stammen wortwörtlich aus `src/main/java/de/frauas/design/backend/`
+> kein vollständiger Quellcode-Abdruck) und stammen wortwörtlich aus `../../src/main/java/de/frauas/design/backend`
 > dieses Repositories (Stand: aktueller Code) bzw. aus `../design-daas-application-backend/` (altes
 > PHP-Backend, zum Vergleich). `[TODO]`/`[Bild: ...]` markieren noch zu erstellende Abbildungen.
 
@@ -52,6 +52,7 @@ Controller aufgerufen wird), wird die Schichtenregel nicht nur dokumentiert, son
 formuliert und bei jedem Build geprüft:
 
 ```java
+
 @ArchTest
 static final ArchRule layerDependencies = layeredArchitecture()
         .consideringAllDependencies()
@@ -63,8 +64,8 @@ static final ArchRule layerDependencies = layeredArchitecture()
         .whereLayer("Repositories").mayOnlyBeAccessedByLayers("Services", "Config", "Bootstrap");
 ```
 
-Zusätzliche Regeln in derselben Testklasse (`ArchitectureTest`) erzwingen Namenskonventionen
-(`@Service`-Klassen müssen auf `Service`/`ServiceImpl` enden, `@Repository`-Klassen auf `Repository` usw.),
+Zusätzliche Regeln in derselben Testklasse (`ArchitectureTest`) erzwingen Namenskonventionen (`@Service`-Klassen müssen
+auf `Service`/`ServiceImpl` enden, `@Repository`-Klassen auf `Repository` usw.),
 Konstruktorinjektion statt Feldinjektion in Services, ein Verbot von `java.util.logging`/`System.out`, und
 dass `shared` von keinem Fachmodul abhängen darf (Vermeidung zirkulärer Kopplung). Ein Verstoß gegen eine
 dieser Regeln lässt `mvn test` fehlschlagen – die Architektur ist damit nicht nur eine Absicht, sondern ein
@@ -77,10 +78,10 @@ Das alte Backend verwendet `league/oauth2-server` mit einem Password-Grant. Für
 geprüft, ob ein vollständiger `spring-security-oauth2-authorization-server` eingesetzt werden soll. Da nur
 zwei Grant-Typen benötigt werden (`password`, `refresh_token`) und `POST /oauth2/user/token` Zugangsdaten
 direkt per Formularparameter entgegennimmt – wie es der alte Vertrag mit dem Frontend vorsieht –, wurde
-stattdessen eine schlanke Eigenimplementierung gewählt: ein selbst gebauter RS256-JWT-Aussteller
-(`TokenIssuer`) in Kombination mit Spring Securitys OAuth2-Resource-Server-Validierung (`JwtDecoder`). Diese
+stattdessen eine schlanke Eigenimplementierung gewählt: ein selbst gebauter RS256-JWT-Aussteller (`TokenIssuer`) in
+Kombination mit Spring Securitys OAuth2-Resource-Server-Validierung (`JwtDecoder`). Diese
 Entscheidung vermeidet den Konfigurationsaufwand eines vollständigen Autorisierungsservers für einen Vertrag,
-der ohnehin nur zwei Grant-Typen abdeckt (vgl. `docs/ARC42.md`, Abschnitt 9, ADR-Tabelle).
+der ohnehin nur zwei Grant-Typen abdeckt (vgl. `../ARC42.md`, Abschnitt 9, ADR-Tabelle).
 
 ### 4.1.5 Schema ausschließlich über Flyway
 
@@ -105,6 +106,7 @@ Geschäftslogik liegt in `TokenService.grantToken`, das über ein Pattern-Matchi
 Variante verzweigt:
 
 ```java
+
 @Transactional(noRollbackFor = TokenGrantException.class)
 public TokenResponseDto grantToken(GrantRequest request) {
     return switch (request) {
@@ -128,10 +130,16 @@ hinausgehen:
 
 ```java
 var userOpt = userRepository.findByEmail(username);
-if (userOpt.isEmpty()) {
-    // always run BCrypt to prevent timing-based user enumeration
-    passwordEncoder.matches(password, DUMMY_HASH);
-    throw new InvalidCredentialsException();
+if(userOpt.
+
+isEmpty()){
+        // always run BCrypt to prevent timing-based user enumeration
+        passwordEncoder.
+
+matches(password, DUMMY_HASH);
+    throw new
+
+InvalidCredentialsException();
 }
 ```
 
@@ -192,7 +200,7 @@ eines symmetrischen Verfahrens wie HS256 bedeutet, dass der öffentliche Schlüs
 ohne das Signier-Geheimnis preiszugeben – relevant, falls künftig ein separater Dienst nur Tokens validieren,
 aber nicht ausstellen soll. Das Schlüsselpaar wird beim ersten Start erzeugt und unter `OAUTH_KEYS_DIR`
 persistiert; ein Verlust dieser Datei entwertet alle zuvor ausgestellten Tokens (dokumentiertes Risiko, siehe
-`docs/ARC42.md` Abschnitt 11).
+`../ARC42.md` Abschnitt 11).
 
 Da JWTs normalerweise zustandslos und damit serverseitig nicht widerrufbar sind, speichert das Backend
 zusätzlich jede ausgestellte `jti` in der Datenbank (`access_tokens`) mit einem `revoked`-Flag – ein bewusster
@@ -202,21 +210,28 @@ Datenbankschlüssel dient und nicht selbst Ansprüche transportieren muss:
 
 ```java
 byte[] bytes = new byte[32];
-SECURE_RANDOM.nextBytes(bytes);
+SECURE_RANDOM.
+
+nextBytes(bytes);
+
 String tokenValue = HexFormat.of().formatHex(bytes);
 ```
 
 ### 4.2.4 Refresh-Token-Rotation
 
 Beim Refresh-Grant wird nicht einfach ein neuer Access-Token zum bestehenden Refresh-Token ausgestellt;
-stattdessen wird bei jeder Erneuerung ein **neuer** Refresh-Token erzeugt und der alte widerrufen
-(Token-Rotation, `TokenService.refreshGrant`):
+stattdessen wird bei jeder Erneuerung ein **neuer** Refresh-Token erzeugt und der alte widerrufen (Token-Rotation,
+`TokenService.refreshGrant`):
 
 ```java
 String newAccessToken = tokenIssuer.issueAccessToken(user, grantedScope);
 String newRefreshToken = tokenIssuer.createRefreshToken(user, grantedScope);
-refreshTokenEntity.revoke();
-refreshTokenRepository.save(refreshTokenEntity);
+refreshTokenEntity.
+
+revoke();
+refreshTokenRepository.
+
+save(refreshTokenEntity);
 ```
 
 Dies begrenzt den Schaden, falls ein Refresh-Token abgefangen wird: Sobald der legitime Client ihn erneut
@@ -239,11 +254,14 @@ mit `@Order(-200)` so positioniert, dass er **vor** der Spring-Security-Filterke
 Anfragen werden also bereits abgewiesen, bevor überhaupt Authentifizierungslogik ausgeführt wird:
 
 ```java
+
 @Component
 @Order(-200)
 public class RateLimitingFilter extends OncePerRequestFilter {
     ...
-    if (rateLimiter.tryConsume(clientIp, path, limit)) {
+            if(rateLimiter.tryConsume(clientIp,path,limit))
+
+    {
         filterChain.doFilter(request, response);
         return;
     }
@@ -269,8 +287,8 @@ Das alte Backend entscheidet über `PermissionCalculationService::getPermission(
 einer vierstufigen Prioritätsliste (siehe `ARCHITECTURE.md` des PHP-Repos, Abschnitt 8): direkte
 Nutzer-Endpunkt-Regel, Nutzergruppen-Endpunkt-Regel, Nutzer-Endpunktgruppen-Regel,
 Nutzergruppen-Endpunktgruppen-Regel, mit Rückfall auf `DENY`. Diese exakte Semantik musste erhalten bleiben,
-da die Python-DaaS-Anwendung ihre Berechtigungsprüfungen unverändert gegen das neue Backend stellt
-(NFA-2/NFA-3). Die neue `PermissionService.checkPermission`-Methode bildet die vier Stufen 1:1 nach:
+da die Python-DaaS-Anwendung ihre Berechtigungsprüfungen unverändert gegen das neue Backend stellt (NFA-2/NFA-3). Die
+neue `PermissionService.checkPermission`-Methode bildet die vier Stufen 1:1 nach:
 
 ```java
 Optional<Boolean> allow = checkDirectUserRule(userId, functionName)
@@ -278,8 +296,12 @@ Optional<Boolean> allow = checkDirectUserRule(userId, functionName)
         .or(() -> checkUserEndpointGroupRule(userId, functionName))
         .or(() -> checkUserGroupEndpointGroupRule(groupIdsSupplier.get(), functionName));
 
-if (allow.isEmpty()) {
-    return PermissionResultDto.deny(userId, userName);
+if(allow.
+
+isEmpty()){
+        return PermissionResultDto.
+
+deny(userId, userName);
 }
 ```
 
@@ -318,8 +340,12 @@ Unbekannte Nutzer-IDs, `null`-Werte oder leere Funktionsnamen werden **vor** jed
 und führen direkt zu `deny`:
 
 ```java
-if (userId == null || functionName == null || functionName.isBlank()) {
-    return PermissionResultDto.deny(userId != null ? userId : UNRESOLVED_USER_ID, UNKNOWN_USER_NAME);
+if(userId ==null||functionName ==null||functionName.
+
+isBlank()){
+        return PermissionResultDto.
+
+deny(userId !=null?userId:UNRESOLVED_USER_ID, UNKNOWN_USER_NAME);
 }
 ```
 
@@ -336,6 +362,7 @@ Datenbankabfrage zu vermeiden, falls Stufe 1 bereits entscheidet:
 ```java
 Supplier<List<Integer>> groupIdsSupplier = new Supplier<>() {
     private List<Integer> cachedGroupIds;
+
     public List<Integer> get() {
         if (cachedGroupIds == null) {
             cachedGroupIds = userRepository.findGroupIdsByUserId(userId);
@@ -374,7 +401,10 @@ der Transaktion:
 private void runAfterCommit(Runnable action) {
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override public void afterCommit() { action.run(); }
+            @Override
+            public void afterCommit() {
+                action.run();
+            }
         });
     } else {
         action.run();
@@ -390,14 +420,26 @@ Konto, das gar nicht existiert).
 `UserService.validateEmail` prüft Code und Ablaufzeit und aktiviert das Konto erst danach:
 
 ```java
-if (user.getRegistrationCode() == null || !user.getRegistrationCode().equals(registrationCode)) {
-    return false;
-}
-if (user.getRegistrationCodeTimeout() != null
-        && Instant.now(clock).isAfter(user.getRegistrationCodeTimeout())) {
-    return false;
-}
-user.setEnabled(true);
+if(user.getRegistrationCode() ==null||!user.
+
+getRegistrationCode().
+
+equals(registrationCode)){
+        return false;
+        }
+        if(user.
+
+getRegistrationCodeTimeout() !=null
+        &&Instant.
+
+now(clock).
+
+isAfter(user.getRegistrationCodeTimeout())){
+        return false;
+        }
+        user.
+
+setEnabled(true);
 ```
 
 `resendRegistrationCode` ist absichtlich **wortkarg**: Für unbekannte, bereits verifizierte oder
@@ -413,14 +455,16 @@ Nutzer. Ändert sich das Passwort eines Nutzers oder wird sein Konto deaktiviert
 ein `UserSessionsInvalidatedEvent`:
 
 ```java
-if (request.getPassword() != null) {
-    ...
-    eventPublisher.publishEvent(new UserSessionsInvalidatedEvent(id));
-}
+if(request.getPassword() !=null){
+        ...
+        eventPublisher.
+
+publishEvent(new UserSessionsInvalidatedEvent(id));
+        }
 ```
 
-Dieses Event entkoppelt die Nutzerverwaltung von der Token-Widerrufslogik: `UserService` muss nicht wissen,
-*wie* Sessions invalidiert werden (das ist Aufgabe eines Listeners im `auth`-Modul) — ein Beispiel für die in
+Dieses Event entkoppelt die Nutzerverwaltung von der Token-Widerrufslogik: `UserService` muss nicht wissen, *wie*
+Sessions invalidiert werden (das ist Aufgabe eines Listeners im `auth`-Modul) — ein Beispiel für die in
 4.1 beschriebene strikte Schichtentrennung, die über reine Methodenaufrufe hinaus auch auf Ereignisebene
 eingehalten wird.
 
@@ -433,8 +477,7 @@ eigentliche Verknüpfungslogik zu Desktop-Groups liegt bewusst im `desktop`-Modu
 Abhängigkeiten zwischen `user` und `desktop` zu vermeiden (durchgesetzt durch dieselbe ArchUnit-Regel aus
 4.1.3, die Abhängigkeitsrichtungen zwischen Paketen prüft).
 
-[TODO: Bild 4.4: Entity-Beziehungsdiagramm User/Admin/UserGroup/Desktop/DesktopGroup, eigene Darstellung
-(nicht die Textgrafik aus ARCHITECTURE.md des PHP-Repos übernehmen).]
+[TODO: Bild 4.4: Entity-Beziehungsdiagramm User/Admin/UserGroup/Desktop/DesktopGroup, eigene Darstellung (nicht die Textgrafik aus ARCHITECTURE.md des PHP-Repos übernehmen).]
 
 ---
 
@@ -448,6 +491,7 @@ DaaS-Anwendung, nicht durch dieses Backend. `createDesktop` erlaubt optional das
 Untergruppen in einem Aufruf:
 
 ```java
+
 @Transactional
 public void createDesktop(DesktopCreateRequest request) {
     Set<String> subGroupDescriptions = new HashSet<>();
@@ -475,9 +519,14 @@ Anfrage noch keinen Konflikt sähe (beide Einträge existieren ja noch nicht).
 keine doppelte Assoziation entsteht:
 
 ```java
-if (ug.getDesktopGroups().contains(dg)) {
-    throw new UserGroupAlreadyAssociatedException(desktopGroupId, userGroupId);
+if(ug.getDesktopGroups().
+
+contains(dg)){
+        throw new
+
+UserGroupAlreadyAssociatedException(desktopGroupId, userGroupId);
 }
+
 linkUserGroupAndDesktopGroup(ug, dg);
 ```
 
@@ -498,13 +547,35 @@ In-Memory-Konsistenz der bidirektionalen Assoziation sonst von der jeweiligen Ab
 erfordert jede Anfrage ein gültiges JWT:
 
 ```java
-auth.requestMatchers(HttpMethod.POST, "/user").permitAll();
-auth.requestMatchers(HttpMethod.POST, "/user/validate_email").permitAll();
-auth.requestMatchers(HttpMethod.POST, "/user/resend_code").permitAll();
-auth.requestMatchers(HttpMethod.POST, "/oauth2/user/token").permitAll();
-auth.requestMatchers(HttpMethod.GET, "/version").permitAll();
+auth.requestMatchers(HttpMethod.POST, "/user").
+
+permitAll();
+auth.
+
+requestMatchers(HttpMethod.POST, "/user/validate_email").
+
+permitAll();
+auth.
+
+requestMatchers(HttpMethod.POST, "/user/resend_code").
+
+permitAll();
+auth.
+
+requestMatchers(HttpMethod.POST, "/oauth2/user/token").
+
+permitAll();
+auth.
+
+requestMatchers(HttpMethod.GET, "/version").
+
+permitAll();
 ...
-auth.anyRequest().authenticated();
+        auth.
+
+anyRequest().
+
+authenticated();
 ```
 
 Diese "deny-by-default, erlaubt nur explizit gelistete Endpunkte"-Struktur ist die Anwendung desselben
@@ -539,11 +610,12 @@ Betriebsartefakt weniger).
 ## 4.7 Demonstrator (AP5)
 
 [TODO: Diesen Abschnitt nach Fertigstellung von AP5 ausfüllen. Vorschlag für Inhalt:]
+
 - Swagger-UI-gestützte Live-Demonstration der Kernabläufe aus Kapitel 3.5 (Login → Berechtigungsprüfung,
   Registrierung → Verifikation, Desktop-/Gruppenanlage).
 - Screenshots der Swagger-UI (`/swagger-ui.html`) mit Beispielanfragen/-antworten.
-- Kurzbeschreibung, wie der Demonstrator gegen eine lokale MariaDB-/Mailhog-Umgebung betrieben wird
-  (`docker-compose`, `.env.example`).
+- Kurzbeschreibung, wie der Demonstrator gegen eine lokale MariaDB-/Mailhog-Umgebung betrieben wird (`docker-compose`,
+  `../../.env.example`).
 
 ## 4.8 Tests & Evaluation (AP6)
 
@@ -553,15 +625,16 @@ Der Build (`mvn verify`) erzwingt zwei automatisierte Qualitätsschranken: die A
 eine Mindest-Testabdeckung von 70 % der Codezeilen über JaCoCo:
 
 ```xml
+
 <rule>
-  <element>BUNDLE</element>
-  <limits>
-    <limit>
-      <counter>LINE</counter>
-      <value>COVEREDRATIO</value>
-      <minimum>0.70</minimum>
-    </limit>
-  </limits>
+    <element>BUNDLE</element>
+    <limits>
+        <limit>
+            <counter>LINE</counter>
+            <value>COVEREDRATIO</value>
+            <minimum>0.70</minimum>
+        </limit>
+    </limits>
 </rule>
 ```
 
@@ -572,6 +645,7 @@ optionales Qualitätsmerkmal, sondern eine harte Build-Voraussetzung (NFA-9).
 
 [TODO: tatsächliche Testsuite auswerten (Anzahl Unit-/Integrationstests je Modul, z. B. via
 `mvn test -Dtest=... ` oder Testverzeichnis-Auswertung) und hier mit konkreten Zahlen ergänzen, z. B.:]
+
 - Unit-Tests je Service (`TokenServiceTest`, `PermissionServiceTest`, `UserServiceTest`, ...)
 - Architektur-Tests (`ArchitectureTest`, siehe 4.1.3)
 - [TODO: Integrationstests mit H2/Testcontainers? Prüfen und ergänzen.]
@@ -580,13 +654,13 @@ optionales Qualitätsmerkmal, sondern eine harte Build-Voraussetzung (NFA-9).
 
 [TODO: Dieser Abschnitt sollte eine strukturierte Gegenüberstellung liefern, z. B. eine Tabelle:]
 
-| Kriterium | Altes Backend (PHP) | Neues Backend (Java) |
-|---|---|---|
-| Schichtenarchitektur erzwungen? | Nein (nur Konvention) | Ja, ArchUnit im Build |
-| Testabdeckung erzwungen? | [TODO: prüfen, ob PHPUnit-Coverage-Gate existiert] | Ja, ≥70 % (JaCoCo) |
-| Berechtigungskaskade | 4-stufig, `PermissionCalculationService` | 4-stufig, identische Priorität, zusätzlich dokumentierte Konfliktauflösung |
-| Schema-Verwaltung | Doctrine Migrations | Flyway, Hibernate nur `validate` |
-| Auth-Mechanismus | `league/oauth2-server`, Password Grant | Eigener RS256-JWT-Aussteller + Spring Resource Server |
+| Kriterium                       | Altes Backend (PHP)                                | Neues Backend (Java)                                                       |
+|---------------------------------|----------------------------------------------------|----------------------------------------------------------------------------|
+| Schichtenarchitektur erzwungen? | Nein (nur Konvention)                              | Ja, ArchUnit im Build                                                      |
+| Testabdeckung erzwungen?        | [TODO: prüfen, ob PHPUnit-Coverage-Gate existiert] | Ja, ≥70 % (JaCoCo)                                                         |
+| Berechtigungskaskade            | 4-stufig, `PermissionCalculationService`           | 4-stufig, identische Priorität, zusätzlich dokumentierte Konfliktauflösung |
+| Schema-Verwaltung               | Doctrine Migrations                                | Flyway, Hibernate nur `validate`                                           |
+| Auth-Mechanismus                | `league/oauth2-server`, Password Grant             | Eigener RS256-JWT-Aussteller + Spring Resource Server                      |
 
 [TODO: Werte für PHP-Testabdeckung (falls vorhanden, z. B. via `phpunit.xml`/CI-Reports) recherchieren,
 um diese Tabelle mit echten Zahlen zu füllen statt Platzhaltern.]
@@ -594,12 +668,13 @@ um diese Tabelle mit echten Zahlen zu füllen statt Platzhaltern.]
 ---
 
 ## Offene Punkte zu diesem Kapitel
+
 - [ ] 5 Abbildungen/Diagramme selbst erstellen (4.1 Paketdiagramm, 4.2 Sequenzdiagramm Login,
-      4.3 PHP-vs-Java-Kaskaden-Vergleich, 4.4 ER-Diagramm, 4.5 n:m-Beziehungen) — keine Fremdgrafiken.
+  4.3 PHP-vs-Java-Kaskaden-Vergleich, 4.4 ER-Diagramm, 4.5 n:m-Beziehungen) — keine Fremdgrafiken.
 - [ ] 4.7 Demonstrator ausformulieren, sobald AP5 abgeschlossen ist (Screenshots, Ablaufbeschreibung).
 - [ ] 4.8 mit echten Testzahlen (Testanzahl, tatsächliche Zeilenabdeckung laut JaCoCo-Report) befüllen,
-      aktuell nur die Build-Schwelle (70 %) bekannt, nicht der tatsächliche Ist-Wert.
+  aktuell nur die Build-Schwelle (70 %) bekannt, nicht der tatsächliche Ist-Wert.
 - [ ] Prüfen, ob das PHP-Backend ein vergleichbares Coverage-/Qualitäts-Gate besitzt, um Tabelle in 4.8.3
-      fair und belegt auszufüllen.
+  fair und belegt auszufüllen.
 - [ ] Lockout-Sonderfall (4.2.2, Dauersperre nach Ablauf+erneutem Fehlversuch) ggf. als Erkenntnis für
-      Kapitel 5 (Ausblick/kritische Reflexion) vormerken.
+  Kapitel 5 (Ausblick/kritische Reflexion) vormerken.
