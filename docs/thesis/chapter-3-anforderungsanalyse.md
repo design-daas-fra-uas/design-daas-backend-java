@@ -211,33 +211,24 @@ Arbeitsspeicher (`tmpfs`), getrennt von der Entwicklungsdatenbank. Cronjobs (z. 
 Registrierungscodes) laufen als separater `yacron`-Dienst; Jobs sind bewusst kurz und über eine
 Nachrichtenwarteschlange entkoppelt, da verpasste Ausführungen nicht automatisch nachgeholt werden.
 
-Grundlage dieser Arbeit sind zum einen die Veröffentlichungen zum DESIGN-System selbst, das
-MobiWis-2024-Paper und der OJCC-Artikel [1], [2] (siehe Kapitel 2.1), die Architektur, Motivation und
-eingesetzte Virtualisierungstechnologien von DESIGN beschreiben, jedoch das Backend selbst nur am Rande
-behandeln. Zum anderen ist die bestehende Implementierung des PHP-Backends die einzige verfügbare
-Ist-Dokumentation dieses Teilsystems, da laut Ausschreibung keine darüberhinausgehende, aktuell gepflegte
-Dokumentation existiert. Die in Abschnitt 3.1.3 beschriebene Analyse ersetzt insofern eine sonst übliche
-vorhandene Fachkonzept- oder Architekturdokumentation und ist Teil des Arbeitspakets AP2.
+### 3.1.3 Umfeldbeschreibung
 
-### 3.1.5 Umfeldbeschreibung
-
-Tabelle 3.3 fasst die vorhandene Hard- und Software-Infrastruktur sowie die daraus resultierenden
-Rahmenbedingungen für das neue Backend zusammen.
+Tabelle 3.3 fasst die vorhandene Infrastruktur und die daraus resultierenden Rahmenbedingungen für das neue
+Backend zusammen.
 
 *Tabelle 3.3: Umfeld und Rahmenbedingungen*
 
-| Umfeldelement         | Beschreibung                                                                                              | Auswirkung auf das neue Backend                                                                         |
-|-----------------------|-----------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|
-| MariaDB               | Alleiniger Datenspeicher des alten Backends (Nutzer, Gruppen, Permissions, Desktops)                      | Muss als Datenspeicher weiterverwendet werden, Schema muss versioniert migrierbar bleiben               |
-| SMTP-Relay            | Versand von Registrierungs-/Verifikations-E-Mails im alten Backend über Symfony Mailer + DB-Warteschlange | Muss weiterhin HTML-E-Mails für dieselben Anlässe versenden können                                      |
-| React-Frontend        | Eigenständiges Repository, konsumiert Auth-/User-/Desktop-Endpunkte des Backends                          | Erwartet unveränderte REST-Verträge (Abschnitt 3.1.2); CORS-Konfiguration muss Frontend-Origin erlauben |
-| Python-DaaS-Anwendung | Eigenständiges Repository, konsumiert ausschließlich die Permissions-Endpunkte                            | Erwartet unveränderten Permissions-Vertrag inkl. 4-stufiger Kaskade                                     |
-| Docker/Docker Compose | Alleinige Betriebsform des alten Backends (Entwicklungs- und Testumgebung als separate Profile)           | Neues Backend muss ebenfalls containerisiert und per Docker betreibbar sein                             |
-| Linux-Zielplattform   | Produktionsbetrieb des alten Backends auf Linux-Servern mit Apache                                        | Neues Backend muss ohne Anpassung auf vergleichbarer Linux-Infrastruktur lauffähig sein                 |
+| Umfeldelement         | Beschreibung                                                      | Auswirkung auf das neue Backend                                         |
+|-----------------------|-------------------------------------------------------------------|-------------------------------------------------------------------------|
+| MariaDB               | Alleiniger Datenspeicher (Nutzer, Gruppen, Permissions, Desktops) | Bleibt Datenspeicher; Schema muss versioniert migrierbar sein           |
+| SMTP-Relay            | Versand von Registrierungs-/Verifikations-E-Mails                 | Muss weiterhin HTML-E-Mails für dieselben Anlässe versenden             |
+| React-Frontend        | Konsumiert Auth-/User-/Desktop-Endpunkte                          | Erwartet unveränderte REST-Verträge; CORS muss Frontend-Origin erlauben |
+| Python-DaaS-Anwendung | Konsumiert nur die Permissions-Endpunkte                          | Erwartet unveränderten Permissions-Vertrag inkl. 4-stufiger Kaskade     |
+| Docker/Docker Compose | Alleinige Betriebsform (Dev-/Testprofile)                         | Muss ebenfalls containerisiert und per Docker betreibbar sein           |
+| Linux-Zielplattform   | Produktionsbetrieb auf Linux mit Apache                           | Muss ohne Anpassung auf vergleichbarer Linux-Infrastruktur laufen       |
 
-Beide bestehenden Clients (Frontend, DaaS-Anwendung) liegen außerhalb des Scopes dieser Arbeit (Kapitel 1,
-Abgrenzung) und werden nicht angepasst; jede hier beschriebene Rahmenbedingung ist daher als feste,
-nicht verhandelbare Vorgabe zu verstehen und nicht als Gestaltungsspielraum für das neue Backend.
+Frontend und DaaS-Anwendung liegen außerhalb des Scopes dieser Arbeit (Kapitel 1, Abgrenzung) und werden
+nicht angepasst; jede hier genannte Rahmenbedingung ist daher eine feste, nicht verhandelbare Vorgabe.
 
 ## 3.2 Klärung der Anforderungen
 
