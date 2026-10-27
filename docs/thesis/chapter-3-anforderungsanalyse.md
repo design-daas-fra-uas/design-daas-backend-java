@@ -102,23 +102,22 @@ flowchart TD
     CTRL --> RESP["JSON-Antwort (PSR-7)"]
 ```
 
-*Abbildung 3.1: Anfrageverarbeitung im alten PHP-Backend (eigene Darstellung nach Quellcode-Analyse des
-`HttpDispatcher` und der Middleware-Kette).*
+*Abbildung 3.1: Anfrageverarbeitung im alten PHP-Backend*
 
-**Domänenmodell.** Abbildung 3.2 zeigt die zentralen Entitäten und ihre Beziehungen. `BaseUser` ist eine
-abstrakte Basis-Entität, von der `Admin` und `User` per *Single Table Inheritance* (STI) erben: beide
-Rollen liegen also in einer gemeinsamen Datenbanktabelle `users`, unterschieden über eine
-Diskriminator-Spalte `role`. Jeder Nutzer besitzt zusätzlich eine `guid` (UUID v4), einen
-`registrationCode` (8-stelliger Hexadezimalwert mit 24 Stunden Gültigkeit, für die E-Mail-Verifikation) und
-ein `enabled`-Flag; Passwörter werden ausschließlich als Hash über ein eigenes `Password`-Value-Object
-gespeichert. Nutzer stehen in einer n:m-Beziehung zu `UserGroup`, `UserGroup` wiederum in einer n:m-Beziehung
-zu `DesktopGroup`, die selbst n:m mit einzelnen `Desktop`-Entitäten verknüpft ist. Getrennt davon existiert
-ein eigenständiges Berechtigungsmodell: `Endpoint`-Entitäten (identifiziert über einen `functionName`,
-zusätzlich URL und HTTP-Methode) können zu `EndpointGroup`s zusammengefasst werden; vier Zuordnungstabellen
-(`EndpointUserAccess`, `EndpointUserGroupAccess`, `EndpointGroupUserAccess`,
-`EndpointGroupUserGroupAccess`) verknüpfen einzelne Nutzer bzw. Nutzergruppen mit einzelnen Endpunkten bzw.
-Endpunktgruppen und tragen jeweils ein Allow/Deny-Flag. Alle Entitäten sind als `final` deklariert, um
-unerwartete Vererbung zu verhindern.
+#### Domänenmodell
+
+Abbildung 3.2 zeigt die zentralen Entitäten und ihre Beziehungen. `BaseUser` ist eine
+abstrakte Basis-Entität, von der `Admin` und `User` per *Single Table Inheritance* (STI) erben: Beide
+Rollen liegen in einer gemeinsamen Tabelle `users`, unterschieden über die Spalte `role`. Jeder Nutzer hat
+zusätzlich eine `guid` (UUID v4), einen `registrationCode` (8-stelliger Hex-Wert, 24 Stunden gültig, für die
+E-Mail-Verifikation) und ein `enabled`-Flag; Passwörter werden nur als Hash über ein `Password`-Value-Object
+gespeichert. Nutzer stehen in einer n:m-Beziehung zu `UserGroup`, diese wiederum n:m zu `DesktopGroup`, die
+selbst n:m mit `Desktop`-Entitäten verknüpft ist. Getrennt davon existiert ein eigenes Berechtigungsmodell:
+`Endpoint`-Entitäten (identifiziert über `functionName`, plus URL und HTTP-Methode) können zu
+`EndpointGroup`s zusammengefasst werden; vier Zuordnungstabellen (`EndpointUserAccess`,
+`EndpointUserGroupAccess`, `EndpointGroupUserAccess`, `EndpointGroupUserGroupAccess`) verknüpfen einzelne
+Nutzer bzw. Nutzergruppen mit einzelnen Endpunkten bzw. Endpunktgruppen und tragen je ein Allow/Deny-Flag.
+Alle Entitäten sind `final`, um unerwartete Vererbung zu verhindern.
 
 ```mermaid
 erDiagram
@@ -136,9 +135,7 @@ erDiagram
     EndpointGroupUserGroupAccess }o--|| EndpointGroup: "bezieht sich auf"
 ```
 
-*Abbildung 3.2: Domänenmodell des alten PHP-Backends (eigene Darstellung nach den Doctrine-Entitätsklassen).
-`BaseUser` wird per Single-Table-Inheritance in `Admin` und `User` spezialisiert (hier aus
-Platzgründen nicht gesondert dargestellt).*
+*Abbildung 3.2: Domänenmodell des alten PHP-Backends*
 
 **Berechtigungsmodell (Permissions-Engine).** Über die reine OAuth2-Unterscheidung zwischen den Scopes
 `user` und `admin` hinaus besitzt das alte Backend ein zweites, feingranulares,
