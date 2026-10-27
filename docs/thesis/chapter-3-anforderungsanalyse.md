@@ -12,26 +12,17 @@ Java-Quellcodes (Paketstruktur, Datenbankschema, Testklassen).
 
 ## 3.1 Generelle Zielsetzung
 
-Dieser Abschnitt stellt zunächst fest, was mit der Arbeit erreicht werden soll (3.1.1), ordnet das Backend
-anschließend in das Gesamtsystem DESIGN ein (3.1.2), beschreibt dann den konkreten Ist-Zustand des alten
-PHP-Backends anhand seines Quellcodes (3.1.3) und schließt mit den vorhergehenden Arbeiten (3.1.4) sowie der
-Umfeldbeschreibung (3.1.5) ab, auf denen die eigentliche Anforderungsableitung in Abschnitt 3.2 aufbaut.
-
-### 3.1.1 Ausgangslage und Zielsetzung des Backends
-
-Im Rahmen dieser Arbeit soll das Backend des Desktop-as-a-Service-Systems **DESIGN** (Kapitel 2.1)
-vollständig neu entwickelt werden. Das bestehende Backend ist in PHP implementiert und wird in der
-Ausschreibung ausdrücklich als „qualitativ schwach" und „schlecht dokumentiert" bezeichnet, während die
-beiden anderen Systemteile, DaaS-Anwendung und Frontend, nach gleicher Quelle als qualitativ gut und
-dokumentiert gelten. Daraus ergibt sich die doppelte Zielsetzung dieses Kapitels: Erstens muss der
-Ist-Zustand des alten Backends so weit analysiert werden, dass sein nach außen sichtbares Verhalten
-(Schnittstellen, Datenformate, Berechtigungslogik) vollständig verstanden ist, denn anders als bei
-DaaS-Anwendung und Frontend existiert hierzu keine brauchbare externe Dokumentation, sodass der Quellcode die
-einzige verlässliche Quelle ist. Zweitens muss daraus ein Anforderungskatalog abgeleitet werden, der
+Das Backend des Desktop-as-a-Service-Systems **DESIGN** (Kapitel 2.1) soll vollständig neu entwickelt werden.
+Das bestehende Backend ist in PHP implementiert und wird in der Ausschreibung ausdrücklich als „qualitativ
+schwach" und „schlecht dokumentiert" bezeichnet; die beiden anderen Systemteile, DaaS-Anwendung und
+Frontend, gelten dagegen als gut und dokumentiert. Daraus ergibt sich die doppelte Zielsetzung dieses
+Kapitels: Erstens muss das sichtbare Verhalten des alten Backends (Schnittstellen, Datenformate,
+Berechtigungslogik) vollständig verstanden werden – eine externe Dokumentation existiert dafür nicht, der
+Quellcode ist die einzige verlässliche Quelle. Zweitens wird daraus ein Anforderungskatalog abgeleitet, der
 festlegt, was ein funktional gleichwertiger, aber wart- und testbarer Nachfolgedienst leisten muss, ohne
-bereits festzulegen, wie dies technisch umgesetzt wird (Gegenstand von Kapitel 4).
+bereits festzulegen, wie dies technisch umgesetzt wird (Kapitel 4).
 
-### 3.1.2 Genereller Aufbau des Gesamtsystems
+### 3.1.1 Genereller Aufbau des Gesamtsystems
 
 Das Gesamtsystem **DESIGN** besteht laut Ausschreibung aus drei eigenständigen Repositories: der **DaaS-Anwendung**
 (Python, verwaltet laut Kapitel 2.1 Container, virtuelle Maschinen, Proxmox VE und
