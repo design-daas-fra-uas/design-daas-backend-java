@@ -37,33 +37,31 @@ Anforderungen.
 
 ### 3.1.2 Ist-Zustand des alten Backends (AP1/AP2)
 
-Die folgende Analyse beruht auf der direkten Durchsicht des Quellcodes des Repositories
-`design-daas-application-backend` (Klassenstruktur, Routen-Attribute, Entitäten, Migrationsskripte,
-`composer.json`, `docker-compose.yml`).
+Die folgende Analyse beruht auf der direkten Durchsicht des Quellcodes von `design-daas-application-backend`
+(Klassenstruktur, Routen-Attribute, Entitäten, Migrationsskripte, `composer.json`, `docker-compose.yml`).
 
-**Technologie-Stack.** Das alte Backend ist in PHP 8.2 implementiert und läuft als Apache-Modul innerhalb
-eines Docker-Containers. Tabelle 3.1 fasst die eingesetzten Bibliotheken und Werkzeuge je Schicht zusammen.
+**Technologie-Stack.** Das alte Backend ist in PHP 8.2 implementiert und läuft als Apache-Modul in einem
+Docker-Container. Tabelle 3.1 zeigt die eingesetzten Technologien je Schicht.
 
 *Tabelle 3.1: Technologie-Stack des alten PHP-Backends*
 
-| Schicht                  | Technologie                                           |
-|--------------------------|-------------------------------------------------------|
-| Sprache                  | PHP 8.2                                               |
-| HTTP-Server              | Apache (im PHP-Container)                             |
-| ORM / Datenbank          | Doctrine ORM 2.x + MariaDB                            |
-| Schema-Migrationen       | Doctrine Migrations                                   |
-| Dependency Injection     | PHP-DI (Autowiring + Annotationen)                    |
-| HTTP-Routing             | Symfony Routing (über PSR-7-Adapter)                  |
-| HTTP-Nachrichten         | PSR-7 (Guzzle-Implementierung)                        |
-| OAuth2                   | `league/oauth2-server` (Password Grant)               |
-| API-Dokumentation        | OpenAPI/Swagger (`zircote/swagger-php`)               |
-| Logging                  | Monolog (PSR-3)                                       |
-| Event-Bus                | Symfony EventDispatcher (PSR-14)                      |
-| Nachrichtenwarteschlange | DB-gestützt, über `enqueue/dbal`                      |
-| E-Mail-Versand           | Symfony Mailer                                        |
-| Cron                     | Yacron                                                |
-| Containerisierung        | Docker + Docker Compose                               |
-| Tests/Statische Analyse  | PHPUnit 10, PHPStan, PHPCS, PHPat (Architektur-Tests) |
+| Schicht              | Technologie                             |
+|----------------------|-----------------------------------------|
+| Sprache              | PHP 8.2                                 |
+| HTTP-Server          | Apache (im Container)                   |
+| ORM / Datenbank      | Doctrine ORM 2.x + MariaDB              |
+| Migrationen          | Doctrine Migrations                     |
+| Dependency Injection | PHP-DI (Autowiring)                     |
+| HTTP-Routing         | Symfony Routing (PSR-7-Adapter)         |
+| OAuth2               | `league/oauth2-server` (Password Grant) |
+| API-Doku             | OpenAPI/Swagger (`zircote/swagger-php`) |
+| Logging              | Monolog (PSR-3)                         |
+| Event-Bus            | Symfony EventDispatcher (PSR-14)        |
+| Warteschlange        | DB-gestützt (`enqueue/dbal`)            |
+| E-Mail               | Symfony Mailer                          |
+| Cron                 | Yacron                                  |
+| Container            | Docker + Docker Compose                 |
+| Tests/Analyse        | PHPUnit 10, PHPStan, PHPCS, PHPat       |
 
 **Modulstruktur und Schichtung.** Der Code ist nicht nach technischen Schichten, sondern nach fachlichen
 Bereichen in sogenannte *vertikale Module* gegliedert: `Main` (Skeleton-Kern: Bootstrap, Exception-Handling,
