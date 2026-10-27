@@ -164,53 +164,52 @@ alte Reihenfolge nachzubilden. Ergänzend existiert ein Desktop-Zugriffstest (`G
 /users/access/{desktopId}`), der prüft, ob der authentifizierte Nutzer über seine Nutzergruppe mit einer
 Desktop-Gruppe verknüpft ist, die den angefragten Desktop enthält.
 
-**Vollständige Schnittstelle (Ist-Zustand).** Tabelle 3.2 listet alle vom alten Backend bereitgestellten
-Endpunkte auf, wie sie sich aus den Routen-Attributen der Controller-Klassen ergeben. Diese Tabelle bildet
-die Grundlage für die funktionalen Anforderungen in Abschnitt 3.2, da jeder Endpunkt, den das alte Backend
-anbietet, vom neuen Backend in äquivalenter Form angeboten werden muss, damit Frontend und DaaS-Anwendung
-unverändert funktionieren.
+#### Vollständige Schnittstelle (Ist-Zustand)
+
+Tabelle 3.2 listet alle vom alten Backend bereitgestellten Endpunkte auf, wie sie sich aus den Routen-Attributen
+der Controller-Klassen ergeben. Diese Tabelle bildet die Grundlage für die funktionalen Anforderungen in
+Abschnitt 3.2, da jeder Endpunkt, den das alte Backend anbietet, vom neuen Backend in äquivalenter Form angeboten
+werden muss, damit Frontend und DaaS-Anwendung unverändert funktionieren.
 
 *Tabelle 3.2: API-Endpunkte des alten PHP-Backends (Ist-Zustand)*
 
-| Modul         | Methode          | Pfad                                      | Berechtigung | Beschreibung                                       |
-|---------------|------------------|-------------------------------------------|--------------|----------------------------------------------------|
-| Main          | GET              | `/version`                                | keine        | Anwendungsversion                                  |
-| OAuth2        | POST             | `/oauth2/user/token`                      | keine        | Zugriffstoken anfordern (Password/Refresh Grant)   |
-| OAuth2        | GET              | `/oauth2/user/session`                    | user/admin   | Session-Info                                       |
-| OAuth2        | GET              | `/ping/user` \| `/ping/admin`             | user/admin   | Diagnose-Endpunkt                                  |
-| User          | POST             | `/user`                                   | keine        | Nutzer registrieren                                |
-| User          | GET              | `/users`                                  | admin        | Nutzer auflisten (paginiert)                       |
-| User          | GET/PATCH/DELETE | `/user/{id}`                              | admin        | Nutzer lesen/ändern/löschen                        |
-| User          | POST             | `/user/{id}/enable` \| `/disable`         | admin        | Nutzerkonto (de)aktivieren                         |
-| User          | POST             | `/user/validate_email`                    | keine        | E-Mail-Adresse verifizieren                        |
-| User          | GET              | `/users/access/{desktopId}`               | user         | Desktop-Zugriff prüfen                             |
-| User          | POST             | `/user/request-application/{app}/{lang}`  | user         | Anwendungsfreischaltung anfragen (E-Mail)          |
-| Admin         | GET              | `/admins`, `/admin/{id}`                  | admin        | Admins auflisten/lesen                             |
-| Admin         | POST/DELETE      | `/admin`, `/admin/{id}`                   | admin        | Admin anlegen/löschen                              |
-| Desktop       | POST/GET         | `/desktop`, `/desktop/{id}`, `/desktops`  | admin        | Desktop anlegen/lesen/auflisten                    |
-| Desktop       | POST/GET         | `/desktop-group`, `/desktop_group/{id}`   | admin        | Desktop-Gruppe anlegen/lesen                       |
-| Desktop       | POST             | `/desktop_group/{dgId}/user_group/{ugId}` | admin        | Nutzergruppe mit Desktop-Gruppe verknüpfen         |
-| Permissions   | GET              | `/permissions/{fn}/{userId}`              | admin        | Berechtigung für Nutzer/Funktion abfragen          |
-| Permissions   | POST             | `/permissions_info`                       | token/admin  | Berechtigung anhand Token + Funktionsname abfragen |
-| UserGroup     | POST/PATCH/GET   | `/user_group`, `/user_group/{id}`, `/user_groups` | admin | Nutzergruppe anlegen/ändern/auflisten        |
-| UserGroup     | POST             | `/user_group/{userGroupId}/{desktopGroupId}` | admin     | Nutzergruppe mit Desktop-Gruppe verknüpfen         |
-| EndpointGroup | PUT/DELETE       | `/endpoint_group/{name}/{userGroupId}/{allow\|deny}` | admin | Zugriffsregel einer Nutzergruppe für eine Endpunktgruppe setzen/entfernen |
+| Modul         | Endpunkt (Methode + Pfad)                                | Beschreibung (Rolle)                          |
+|---------------|----------------------------------------------------------|-----------------------------------------------|
+| Main          | `GET /version`                                           | Anwendungsversion (offen)                     |
+| OAuth2        | `POST /oauth2/user/token`                                | Token anfordern (offen)                       |
+| OAuth2        | `GET /oauth2/user/session`                               | Session-Info (user/admin)                     |
+| OAuth2        | `GET /ping/{rolle}`                                      | Diagnose (user/admin)                         |
+| User          | `POST /user`                                             | Registrieren (offen)                          |
+| User          | `GET /users`                                             | Nutzer auflisten (admin)                      |
+| User          | `GET/PATCH/DELETE /user/{id}`                            | Nutzer lesen/ändern/löschen (admin)           |
+| User          | `POST /user/{id}/enable`\|`/disable`                     | Konto (de)aktivieren (admin)                  |
+| User          | `POST /user/validate_email`                              | E-Mail verifizieren (offen)                   |
+| User          | `GET /users/access/{desktopId}`                          | Desktop-Zugriff prüfen (user)                 |
+| User          | `POST /user/request-application/{app}/{lang}`            | Freischaltung anfragen (user)                 |
+| Admin         | `GET /admins`, `/admin/{id}`                             | Admins auflisten/lesen (admin)                |
+| Admin         | `POST/DELETE /admin`, `/admin/{id}`                      | Admin anlegen/löschen (admin)                 |
+| Desktop       | `POST/GET /desktop(s)`, `/desktop/{id}`                  | Desktop anlegen/lesen/auflisten (admin)       |
+| Desktop       | `POST/GET /desktop-group`, `/desktop_group/{id}`         | Desktop-Gruppe anlegen/lesen (admin)          |
+| Desktop       | `POST /desktop_group/{dgId}/user_group/{ugId}`           | Nutzergruppe verknüpfen (admin)               |
+| Permissions   | `GET /permissions/{fn}/{userId}`                         | Berechtigung abfragen (admin)                 |
+| Permissions   | `POST /permissions_info`                                 | Berechtigung per Token abfragen (token/admin) |
+| UserGroup     | `POST/PATCH/GET /user_group(s)`, `/user_group/{id}`      | Nutzergruppe anlegen/ändern/auflisten (admin) |
+| UserGroup     | `POST /user_group/{ugId}/{dgId}`                         | Mit Desktop-Gruppe verknüpfen (admin)         |
+| EndpointGroup | `PUT/DELETE /endpoint_group/{name}/{ugId}/{allow\|deny}` | Zugriffsregel setzen/entfernen (admin)        |
 
-Die `Endpoint`- und `EndpointGroup`-Stammdaten selbst (welche Funktion zu welcher Endpunktgruppe gehört)
-werden nicht über die HTTP-Schnittstelle verwaltet, sondern über ein CLI-Kommando
-(`permissions:import`, `PermissionsCliCommands`) aus einer JSON-Datei importiert; über die HTTP-API lassen
-sich ausschließlich die Allow/Deny-Zuordnungen zwischen Nutzergruppen und bestehenden Endpunktgruppen
-pflegen.
+Die `Endpoint`- und `EndpointGroup`-Stammdaten (welche Funktion zu welcher Endpunktgruppe gehört) werden
+nicht über HTTP verwaltet, sondern per CLI-Kommando (`permissions:import`) aus einer JSON-Datei importiert.
+Über die HTTP-API lassen sich nur die Allow/Deny-Zuordnungen zwischen Nutzergruppen und bestehenden
+Endpunktgruppen pflegen.
 
-**Konfiguration und Betrieb.** Sämtliche Konfiguration erfolgt über Umgebungsvariablen, die beim
-Containerstart in den Dependency-Injection-Container abgebildet werden. Der Betrieb erfolgt
-über Docker Compose mit zwei Profilen (`dev-environment`, `release-test-environment`); die
-Test-Datenbank läuft als eigenständige, flüchtige MariaDB-Instanz im Arbeitsspeicher (`tmpfs`), getrennt von
-der Entwicklungsdatenbank. Cronjobs (z. B. zum Aufräumen abgelaufener Registrierungscodes) laufen als
-separater `yacron`-Dienst; die Konfiguration schreibt dabei bewusst kurze, in eine Nachrichtenwarteschlange
-entkoppelte Jobs vor, da verpasste Ausführungen nicht automatisch nachgeholt werden.
+#### Konfiguration und Betrieb
 
-### 3.1.4 Vorhergehende Arbeiten
+Die Konfiguration erfolgt über Umgebungsvariablen, die beim Containerstart in den Dependency-Injection-Container
+abgebildet werden. Der Betrieb läuft über Docker Compose mit zwei Profilen (`dev-environment`,
+`release-test-environment`); die Test-Datenbank ist eine eigenständige, flüchtige MariaDB-Instanz im
+Arbeitsspeicher (`tmpfs`), getrennt von der Entwicklungsdatenbank. Cronjobs (z. B. zum Aufräumen abgelaufener
+Registrierungscodes) laufen als separater `yacron`-Dienst; Jobs sind bewusst kurz und über eine
+Nachrichtenwarteschlange entkoppelt, da verpasste Ausführungen nicht automatisch nachgeholt werden.
 
 Grundlage dieser Arbeit sind zum einen die Veröffentlichungen zum DESIGN-System selbst, das
 MobiWis-2024-Paper und der OJCC-Artikel [1], [2] (siehe Kapitel 2.1), die Architektur, Motivation und
