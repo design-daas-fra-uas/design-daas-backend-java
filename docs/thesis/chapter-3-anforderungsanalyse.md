@@ -24,20 +24,18 @@ bereits festzulegen, wie dies technisch umgesetzt wird (Kapitel 4).
 
 ### 3.1.1 Genereller Aufbau des Gesamtsystems
 
-Das Gesamtsystem **DESIGN** besteht laut Ausschreibung aus drei eigenständigen Repositories: der **DaaS-Anwendung**
-(Python, verwaltet laut Kapitel 2.1 Container, virtuelle Maschinen, Proxmox VE und
-Apache Guacamole und damit die eigentliche Bereitstellung von Desktops), dem **Frontend** (React,
-grafische Oberfläche für Endnutzer und Administratoren) und dem **Backend**, das Gegenstand dieser Arbeit
-ist. Diese drei Teile kommunizieren ausschließlich über REST-Schnittstellen miteinander; es gibt keine
-gemeinsame Codebasis oder gemeinsam genutzte Bibliotheken zwischen ihnen. Frontend und DaaS-Anwendung
-werden im Rahmen dieser Arbeit nicht verändert (siehe Abgrenzung in Kapitel 1); das neue Backend muss daher
-deren bestehende Schnittstellenerwartungen (Pfade, HTTP-Methoden, Feldnamen in JSON-Antworten,
-Statuscodes sowie die Semantik der Berechtigungsprüfung) exakt so weiter erfüllen, wie es das alte
-PHP-Backend bislang tut. Diese Bedingung zieht sich als sogenannte *Verhaltenskompatibilität* durch das
-gesamte Kapitel und ist der wichtigste limitierende Faktor für die in Abschnitt 3.2 abgeleiteten
+Das Gesamtsystem **DESIGN** besteht aus drei eigenständigen Repositories: der **DaaS-Anwendung** (Python;
+verwaltet Container, virtuelle Maschinen, Proxmox VE und Apache Guacamole, also die eigentliche
+Bereitstellung von Desktops), dem **Frontend** (React; grafische Oberfläche für Endnutzer und
+Administratoren) und dem **Backend**, das Gegenstand dieser Arbeit ist. Die drei Teile kommunizieren
+ausschließlich über REST-Schnittstellen; es gibt keine gemeinsame Codebasis. Frontend und DaaS-Anwendung
+werden in dieser Arbeit nicht verändert (Kapitel 1, Abgrenzung). Das neue Backend muss daher deren
+bestehende Schnittstellenerwartungen – Pfade, HTTP-Methoden, JSON-Feldnamen, Statuscodes und die Semantik
+der Berechtigungsprüfung – exakt so erfüllen wie bisher das alte PHP-Backend. Diese sogenannte
+*Verhaltenskompatibilität* ist der wichtigste limitierende Faktor für die in Abschnitt 3.2 abgeleiteten
 Anforderungen.
 
-### 3.1.3 Ist-Zustand des alten Backends (AP1/AP2)
+### 3.1.2 Ist-Zustand des alten Backends (AP1/AP2)
 
 Die folgende Analyse beruht auf der direkten Durchsicht des Quellcodes des Repositories
 `design-daas-application-backend` (Klassenstruktur, Routen-Attribute, Entitäten, Migrationsskripte,
