@@ -1,14 +1,12 @@
 # 3 Anforderungsanalyse
 
-Dieses Kapitel beschreibt, welches Problem mit dieser Arbeit gelöst werden soll und welche Eigenschaften die
-Lösung erfüllen muss, nicht, mit welchen Klassen, Bibliotheken oder Algorithmen dies in Kapitel 4 geschieht.
-Es stützt sich auf zwei Quellen: die offizielle Aufgabenstellung (Ausschreibung, Arbeitspakete AP1–AP6) und
-die vollständige Quellcode-Analyse des bestehenden PHP-Backends (`design-daas-application-backend`,
-Abschnitt 3.1). Keine der im Folgenden genannten Anforderungen ist frei erfunden; jede lässt sich auf eine
-konkrete Stelle im Code, einer Konfigurationsdatei oder der Ausschreibung zurückführen. Abschnitt 3.4
-beschreibt zusätzlich den tatsächlich realisierten Zielzustand anhand des in dieser Arbeit entstandenen
-Java-Quellcodes selbst (Paketstruktur, Datenbankschema, Testklassen), nicht anhand einer separaten
-Architekturbeschreibung.
+Dieses Kapitel beschreibt, welches Problem gelöst werden soll und welche Eigenschaften die Lösung erfüllen
+muss – nicht, mit welchen Klassen, Bibliotheken oder Algorithmen dies in Kapitel 4 geschieht. Grundlage sind
+zwei Quellen: die offizielle Ausschreibung (Arbeitspakete AP1–AP6) und die vollständige Quellcode-Analyse
+des bestehenden PHP-Backends `design-daas-application-backend` (Abschnitt 3.1). Jede genannte Anforderung
+lässt sich auf eine konkrete Stelle im Code, in einer Konfigurationsdatei oder in der Ausschreibung
+zurückführen. Abschnitt 3.4 beschreibt zusätzlich den tatsächlich erreichten Zielzustand anhand des neuen
+Java-Quellcodes (Paketstruktur, Datenbankschema, Testklassen).
 
 ---
 
