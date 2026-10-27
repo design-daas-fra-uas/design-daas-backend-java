@@ -137,33 +137,32 @@ erDiagram
 
 *Abbildung 3.2: Domänenmodell des alten PHP-Backends*
 
-**Berechtigungsmodell (Permissions-Engine).** Über die reine OAuth2-Unterscheidung zwischen den Scopes
-`user` und `admin` hinaus besitzt das alte Backend ein zweites, feingranulares,
-datenbankgetriebenes Berechtigungssystem. Die zentrale Methode
-`PermissionCalculationService::getPermission($functionName, $userId)` prüft in einer festen
-Prioritätsreihenfolge vier Regeltypen und wählt die erste zutreffende Regel:
+#### Berechtigungsmodell (Permissions-Engine)
 
-1. `EndpointUserAccess`: eine Regel für genau diesen Nutzer und genau diesen Endpunkt,
-2. `EndpointUserGroupAccess`: eine Regel für eine Nutzergruppe des Nutzers und genau diesen Endpunkt,
-3. `EndpointGroupUserAccess`: eine Regel für genau diesen Nutzer und eine Endpunktgruppe, der dieser
-   Endpunkt angehört,
-4. `EndpointGroupUserGroupAccess`: eine Regel für eine Nutzergruppe des Nutzers und eine Endpunktgruppe.
+Zusätzlich zur groben OAuth2-Unterscheidung zwischen den Scopes `user` und `admin` besitzt das alte Backend
+ein zweites, feingranulares, datenbankgetriebenes Berechtigungssystem. Die zentrale Methode
+`PermissionCalculationService::getPermission($functionName,$userId)` prüft in fester Reihenfolge vier Regeltypen
+und wählt die erste zutreffende:
 
-Greift keine dieser vier Regeln, ist das Ergebnis per Voreinstellung **Zugriffsverweigerung** (*fail-closed*).
-Dieses Verhalten, insbesondere die genaue Reihenfolge der vier Stufen und die Default-Deny-Regel, ist für
-die DaaS-Anwendung sicherheitskritisch, da sie sich bei jeder Aktion eines Nutzers auf dieses Ergebnis
-verlässt, und muss im neuen Backend in der Prioritätsreihenfolge identisch reproduziert werden (siehe
-NFA-1/NFA-2 in Abschnitt 3.2). Innerhalb von Schritt 2 und Schritt 4 iteriert die Methode über alle
-Nutzergruppen, denen der Nutzer angehört, und gibt das Ergebnis der *ersten* Nutzergruppe zurück, für die
-eine passende Regel existiert (`findOneBy`-Abfrage je Gruppe in der `foreach`-Schleife); da die
-Reihenfolge, in der `BaseUser::groups()` die Gruppen eines Nutzers liefert, im Code nicht explizit
-sortiert wird, ist das alte Verhalten bei mehreren widersprüchlichen Gruppenregeln desselben Nutzers nicht
-deterministisch spezifiziert, sondern hängt von der internen Reihenfolge der Doctrine-Collection ab. Diese
-Beobachtung ist Ausgangspunkt für die Entscheidung in Abschnitt 3.4.2, im neuen Backend eine explizite,
-deterministische Konfliktauflösung zu ergänzen, statt die unspezifizierte alte Reihenfolge nachzubilden.
-Ergänzend existiert ein spezieller Desktop-Zugriffstest (`GET /users/access/{desktopId}`), der prüft, ob der
-authentifizierte Nutzer über seine Nutzergruppe mit einer Desktop-Gruppe verknüpft ist, die den
-angefragten Desktop enthält.
+1. `EndpointUserAccess`: Regel für genau diesen Nutzer und genau diesen Endpunkt,
+2. `EndpointUserGroupAccess`: Regel für eine Nutzergruppe des Nutzers und genau diesen Endpunkt,
+3. `EndpointGroupUserAccess`: Regel für genau diesen Nutzer und eine Endpunktgruppe, der dieser Endpunkt
+   angehört,
+4. `EndpointGroupUserGroupAccess`: Regel für eine Nutzergruppe des Nutzers und eine Endpunktgruppe.
+
+Greift keine dieser vier Regeln, gilt per Voreinstellung **Zugriffsverweigerung** (*fail-closed*). Dieses
+Verhalten – insbesondere die Reihenfolge der vier Stufen und die Default-Deny-Regel – ist für die
+DaaS-Anwendung sicherheitskritisch, da sie sich bei jeder Nutzeraktion darauf verlässt. Das neue Backend
+muss es daher in gleicher Reihenfolge reproduzieren (NFA-1/NFA-2, Abschnitt 3.2). Innerhalb der Schritte 2
+und 4 iteriert die Methode über alle Nutzergruppen des Nutzers und gibt das Ergebnis der *ersten* Gruppe
+zurück, für die eine passende Regel existiert. Da die Reihenfolge, in der `BaseUser::groups()` diese
+Gruppen liefert, im Code nicht sortiert wird, ist das Verhalten bei mehreren widersprüchlichen
+Gruppenregeln desselben Nutzers nicht deterministisch, sondern hängt von der internen Reihenfolge der
+Doctrine-Collection ab. Diese Beobachtung ist Ausgangspunkt für die Entscheidung in Abschnitt 3.4.2, im
+neuen Backend eine explizite, deterministische Konfliktauflösung zu ergänzen, statt die unspezifizierte
+alte Reihenfolge nachzubilden. Ergänzend existiert ein Desktop-Zugriffstest (`GET
+/users/access/{desktopId}`), der prüft, ob der authentifizierte Nutzer über seine Nutzergruppe mit einer
+Desktop-Gruppe verknüpft ist, die den angefragten Desktop enthält.
 
 **Vollständige Schnittstelle (Ist-Zustand).** Tabelle 3.2 listet alle vom alten Backend bereitgestellten
 Endpunkte auf, wie sie sich aus den Routen-Attributen der Controller-Klassen ergeben. Diese Tabelle bildet
