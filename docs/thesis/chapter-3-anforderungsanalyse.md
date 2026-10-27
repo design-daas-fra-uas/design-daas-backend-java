@@ -40,7 +40,9 @@ Anforderungen.
 Die folgende Analyse beruht auf der direkten Durchsicht des Quellcodes von `design-daas-application-backend`
 (Klassenstruktur, Routen-Attribute, Entitäten, Migrationsskripte, `composer.json`, `docker-compose.yml`).
 
-**Technologie-Stack.** Das alte Backend ist in PHP 8.2 implementiert und läuft als Apache-Modul in einem
+#### Technologie-Stack
+
+Das alte Backend ist in PHP 8.2 implementiert und läuft als Apache-Modul in einem
 Docker-Container. Tabelle 3.1 zeigt die eingesetzten Technologien je Schicht.
 
 *Tabelle 3.1: Technologie-Stack des alten PHP-Backends*
@@ -63,15 +65,20 @@ Docker-Container. Tabelle 3.1 zeigt die eingesetzten Technologien je Schicht.
 | Container            | Docker + Docker Compose                 |
 | Tests/Analyse        | PHPUnit 10, PHPStan, PHPCS, PHPat       |
 
-**Modulstruktur und Schichtung.** Der Code ist nicht nach technischen Schichten, sondern nach fachlichen
-Bereichen in sogenannte *vertikale Module* gegliedert: `Main` (Skeleton-Kern: Bootstrap, Exception-Handling,
-Versions-Endpunkt), `Util` (Querschnittsfunktionen wie Mailversand, OAuth2-Middleware, Swagger-Auslieferung,
-ohne fachliche Abhängigkeiten), `OAuth2` (Token-Endpunkt, Session-Info), `User` (Nutzer-/Admin-Verwaltung,
-Gruppen, Registrierung), `Desktop` (Desktop- und Desktop-Gruppen-Verwaltung) sowie `Permissions`
-(feingranulare Zugriffskontrolle). Jedes dieser Module folgt innerhalb seiner Grenzen derselben internen
-Schichtung `Model → Repository → Service → Controller`, ergänzt um lokale `DTO`-, `Enum`- und
-`Exception`-Unterpakete. Dieses Muster, fachliche Module mit identischer interner Schichtung, ist für die
-in Abschnitt 3.4 beschriebene Zielarchitektur bedeutsam, da es dort 1:1 in Java-Pakete übersetzt wird.
+#### Modulstruktur und Schichtung
+
+Der Code ist nicht nach technischen Schichten, sondern nach fachlichen Bereichen in *vertikale Module* gegliedert:
+
+- `Main`: Bootstrap, Fehlerbehandlung, Versions-Endpunkt
+- `Util`: Querschnittsfunktionen wie Mailversand, OAuth2-Middleware, Swagger-Auslieferung
+- `OAuth2`: Token-Endpunkt, Session-Info
+- `User`: Nutzer-/Admin-Verwaltung, Gruppen, Registrierung
+- `Desktop`: Desktop- und Desktop-Gruppen-Verwaltung
+- `Permissions`: feingranulare Zugriffskontrolle
+
+Jedes Modul ist intern gleich geschichtet: `Model → Repository → Service → Controller`, ergänzt um lokale `DTO`-,
+`Enum`- und `Exception`-Unterpakete. Dieses Muster – fachliche Module mit identischer interner Schichtung – wird in
+Abschnitt 3.4 1:1 in Java-Pakete übersetzt.
 
 **Anfrageverarbeitung (Request-Lifecycle).** Jede HTTP-Anfrage durchläuft denselben Ablauf: Nach dem
 Bootstrap (Laden von Fehlerbehandlung, Doctrine-Konfiguration und Dependency-Injection-Container) übernimmt
