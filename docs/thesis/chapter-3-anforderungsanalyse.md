@@ -80,17 +80,17 @@ Jedes Modul ist intern gleich geschichtet: `Model → Repository → Service →
 `Enum`- und `Exception`-Unterpakete. Dieses Muster – fachliche Module mit identischer interner Schichtung – wird in
 Abschnitt 3.4 1:1 in Java-Pakete übersetzt.
 
-**Anfrageverarbeitung (Request-Lifecycle).** Jede HTTP-Anfrage durchläuft denselben Ablauf: Nach dem
-Bootstrap (Laden von Fehlerbehandlung, Doctrine-Konfiguration und Dependency-Injection-Container) übernimmt
-ein `HttpDispatcher` auf Basis von Symfony Routing die Anfrage. Vor dem eigentlichen Routing durchläuft sie
-eine Kette von Middleware-Komponenten zur Auflösung der Basis-URL und zum Setzen von
-CORS-Response-Headern; nach dem Routing greifen zwei weitere Middleware-Komponenten: eine zur Behandlung
-ungültiger Nutzereingaben und `OAuth2AccessControlMiddleware`, die anhand einer je Route hinterlegten
-OpenAPI-Sicherheitsannotation (z. B. `#[OA\Get(security: [["oauth2-user" => ["admin"]]])]`) das mitgesendete
-Zugriffstoken validiert und den authentifizierten Benutzer in die Anfrage injiziert. Erst danach wird die
-passende Controller-Aktion aufgerufen, die über Service- und Repository-Schicht auf den Doctrine
-`EntityManager` und damit auf MariaDB zugreift; die Antwort wird abschließend als JSON über eine
-PSR-7-Response zurückgegeben.
+#### Anfrageverarbeitung (Request-Lifecycle)
+
+Jede HTTP-Anfrage durchläuft denselben Ablauf: Nach dem Bootstrap (Fehlerbehandlung, Doctrine-Konfiguration,
+Dependency-Injection-Container) übernimmt ein `HttpDispatcher` auf Basis von Symfony Routing die Anfrage.
+Vor dem Routing laufen Middleware-Komponenten zur Auflösung der Basis-URL und zum Setzen der CORS-Header;
+nach dem Routing folgen zwei weitere: eine zur Behandlung ungültiger Eingaben und die `OAuth2AccessControlMiddleware`.
+Letztere liest eine je Route hinterlegte OpenAPI-Sicherheitsannotation (z. B.
+`#[OA\Get(security: [["oauth2-user" => ["admin"]]])]`), validiert das mitgesendete Zugriffstoken und
+injiziert den authentifizierten Benutzer in die Anfrage. Erst danach wird die passende Controller-Aktion
+aufgerufen, die über Service- und Repository-Schicht auf den Doctrine `EntityManager` und damit auf MariaDB
+zugreift; die Antwort wird als JSON über eine PSR-7-Response zurückgegeben.
 
 ```mermaid
 flowchart TD
