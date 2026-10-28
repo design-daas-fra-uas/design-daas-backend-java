@@ -239,26 +239,25 @@ beobachtbaren Verhalten des bestehenden Systems rekonstruiert.
 
 ### 3.2.2 Klärung der Hauptfunktionalität und Problemfeldabgrenzung
 
-Die Hauptfunktionalität des Backends lässt sich aus der Modulstruktur des alten Systems (Abschnitt 3.1.3)
-in vier Bereiche gliedern, die vom neuen Backend unverändert angeboten werden müssen:
+Die Hauptfunktionalität lässt sich aus der Modulstruktur des alten Systems (Abschnitt 3.1.3) in vier
+Bereiche gliedern, die das neue Backend unverändert anbieten muss:
 
-1. **Authentifizierung**: Ausstellen, Erneuern, Widerrufen und Prüfen von Zugriffstoken für Nutzer (vormals
+1. **Authentifizierung**: Ausstellen, Erneuern, Widerrufen und Prüfen von Zugriffstoken (vormals
    `OAuth2`-Modul).
-2. **Autorisierung**: Beantwortung der Frage „darf Nutzer X Funktion Y aufrufen?" über die in Abschnitt
-   3.1.3 beschriebene 4-stufige Kaskade (vormals `Permissions`-Modul).
+2. **Autorisierung**: Beantwortung der Frage „darf Nutzer X Funktion Y aufrufen?" über die 4-stufige
+   Kaskade aus Abschnitt 3.1.3 (vormals `Permissions`-Modul).
 3. **Benutzerverwaltung**: Selbstregistrierung mit E-Mail-Verifikation, administrative Verwaltung von
-   Nutzern, Admins und Nutzergruppen, sowie das Anfragen einer Anwendungsfreischaltung (vormals `User`-Modul).
+   Nutzern, Admins und Nutzergruppen sowie Anfragen einer Anwendungsfreischaltung (vormals `User`-Modul).
 4. **Desktop-Inventarverwaltung**: Anlegen, Auflisten und Verknüpfen von Desktops und Desktop-Gruppen mit
    Nutzergruppen (vormals `Desktop`-Modul).
 
-Explizit **nicht** Teil dieser Arbeit, und damit außerhalb des Problemfelds, ist die eigentliche
-Bereitstellung von Desktops, also das Starten, Klonen oder Beenden von Containern und virtuellen Maschinen
-sowie die Steuerung von Apache Guacamole; diese Aufgaben übernimmt laut Ausschreibung und laut Kapitel 2.1
-ausschließlich die Python-DaaS-Anwendung. Das Backend stellt dafür lediglich die zugehörigen
-Inventar-/Stammdaten (welcher Desktop existiert, welcher Nutzergruppe ist er zugeordnet) sowie die
-Authentifizierungs- und Berechtigungsauskünfte bereit, auf deren Basis die DaaS-Anwendung ihre eigenen
-Entscheidungen trifft. Ebenfalls nicht Teil der Arbeit sind jegliche über die in Kapitel 1 (Abgrenzung)
-genannten punktuellen Korrekturen hinausgehende funktionale Änderungen an Frontend oder DaaS-Anwendung.
+**Nicht** Teil dieser Arbeit ist die eigentliche Bereitstellung von Desktops – das Starten, Klonen oder
+Beenden von Containern und virtuellen Maschinen sowie die Steuerung von Apache Guacamole. Diese Aufgaben
+übernimmt ausschließlich die Python-DaaS-Anwendung. Das Backend stellt dafür nur die Stammdaten (welcher
+Desktop existiert, welcher Nutzergruppe ist er zugeordnet) sowie Authentifizierungs- und
+Berechtigungsauskünfte bereit, auf deren Basis die DaaS-Anwendung ihre eigenen Entscheidungen trifft.
+Ebenfalls außerhalb des Scopes liegen funktionale Änderungen an Frontend oder DaaS-Anwendung, die über die
+in Kapitel 1 genannten punktuellen Korrekturen hinausgehen.
 
 ### 3.2.3 Ableitung der funktionalen Anforderungen
 
