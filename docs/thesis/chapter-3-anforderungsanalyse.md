@@ -363,24 +363,23 @@ Maßnahmen zur Absicherung von Wartbarkeit und Testbarkeit (3.4.4).
 
 ### 3.4.1 Architekturüberblick
 
-Das Zielsystem ist ein eigenständiger Java-21-/Spring-Boot-Dienst (`de.frauas.design.backend`), der dasselbe
-Konzept vertikaler, fachlicher Module wie das alte Backend übernimmt (Abschnitt 3.1.3), jedoch mit einer
-automatisiert erzwungenen statt nur konventionell eingehaltenen internen Schichtung. Die vier fachlichen
-Module **auth**, **permission**, **user** und **desktop** entsprechen den vier in Abschnitt 3.2.2 genannten
-Funktionsbereichen und damit den alten Modulen `OAuth2`, `Permissions`, `User` und `Desktop`; ergänzt werden
-sie durch drei Querschnittspakete: **shared** (modulübergreifend genutzte DTOs, Exceptions,
-Sicherheits-/Hilfsklassen, ohne Abhängigkeit zu einem fachlichen Modul), **config** (typisierte
-Spring-`@Configuration`-Klassen) und **bootstrap** (Aufgaben beim Anwendungsstart, z. B. Anlage eines
-Standard-Administratorkontos). Jedes fachliche Modul ist intern identisch geschichtet in
+Das Zielsystem ist ein eigenständiger Java-21-/Spring-Boot-Dienst (`de.frauas.design.backend`), der das
+gleiche Konzept vertikaler, fachlicher Module wie das alte Backend übernimmt (Abschnitt 3.1.2), jedoch mit
+automatisiert erzwungener statt nur konventioneller interner Schichtung. Die vier Module **auth**, **permission**,
+**user** und **desktop** entsprechen den vier Funktionsbereichen aus Abschnitt 3.2.1 und
+damit den alten Modulen `OAuth2`, `Permissions`, `User` und `Desktop`. Ergänzt werden sie durch drei
+Querschnittspakete: **shared** (modulübergreifend genutzte DTOs, Exceptions, Sicherheits-/Hilfsklassen), **config**
+(Spring-`@Configuration`-Klassen) und **bootstrap** (Aufgaben beim Anwendungsstart, z. B. Anlage
+eines Standard-Administratorkontos). Jedes Modul ist intern gleich geschichtet in
 `controller → service → repository → model`, ergänzt um lokale `dto`- und `exception`-Unterpakete: eine
 direkte Übersetzung des alten `Model → Repository → Service → Controller`-Musters in eine für Spring Boot
 idiomatische Reihenfolge. Anders als im alten Backend ist diese Schichtung nicht nur Konvention, sondern wird
-durch eine dedizierte ArchUnit-Testklasse automatisiert geprüft (Abschnitt 3.4.4).
+durch eine dedizierte ArchUnit-Testklasse automatisiert geprüft (Abschnitt 3.4.3).
 
 ```mermaid
 flowchart TB
-    FE["Frontend (React, unverändert)"] -- "REST, gleiche Endpunkte/Feldformate" --> BE
-    DAAS["DaaS-Anwendung (Python, unverändert)"] -- "REST, gleicher Permissions-Vertrag" --> BE
+    FE["Frontend (React, unverändert)"] -- " REST, gleiche Endpunkte/Feldformate " --> BE
+    DAAS["DaaS-Anwendung (Python, unverändert)"] -- " REST, gleicher Permissions-Vertrag " --> BE
     ADMIN["Admin (Swagger UI, SCOPE_admin)"] --> BE
     subgraph BE["Neues Backend: Java 21 / Spring Boot"]
         direction LR
@@ -389,50 +388,48 @@ flowchart TB
         USER["user"]
         DESK["desktop"]
     end
-    BE -. "Querschnitt: shared, config, bootstrap\nSchichtung je Modul durch ArchUnit erzwungen" .-> BE
+    BE -. " Querschnitt: shared, config, bootstrap\nSchichtung je Modul durch ArchUnit erzwungen " .-> BE
     BE --> DB[("MariaDB\nSchema über Flyway migriert")]
     BE --> SMTP["SMTP-Relay\nRegistrierungs-/Verifikations-E-Mails"]
 ```
 
-*Abbildung 3.3: Zielzustand des neuen Backends (eigene Darstellung nach der im Rahmen dieser Arbeit
-entstandenen Paketstruktur `../../src/main/java/de/frauas/design/backend`).*
+*Abbildung 3.3: Zielzustand des neuen Backends.*
 
 ### 3.4.2 Authentifizierungs- und Autorisierungskonzept
 
-Authentifizierung erfolgt zustandslos über RS256-signierte JSON Web Token (Kapitel 2.2): Ein eigener
-Token-Aussteller validiert Benutzername und Passwort bzw. ein vorgelegtes Refresh-Token und stellt im
-Erfolgsfall ein JWT aus, dessen Signatur über ein beim ersten Start erzeugtes und persistiertes
-RSA-Schlüsselpaar geprüft werden kann; ein Verlust dieses Schlüssels entwertet alle zuvor ausgestellten
-Tokens. Damit ein an sich zustandsloses Token dennoch, wie in NFA-6 gefordert, serverseitig widerrufen werden
-kann, führt das Zielsystem zwei Datenbanktabellen (`access_tokens`, `refresh_tokens`, definiert in der
-Flyway-Migration `V1__init.sql`) mit je einem `revoked`-Flag und einem `revoked_at`-Zeitstempel, die bei
-jeder Prüfung eines Tokens zusätzlich zur kryptografischen Signatur konsultiert werden; `access_tokens`
-referenziert den Nutzer zusätzlich über ein eindeutiges `jti`-Feld, über das ein einzelnes Token gezielt
-widerrufen werden kann, ohne alle Tokens des Nutzers ungültig zu machen. Ergänzend begrenzt ein
-`RateLimitingFilter` (Paket `shared.security.filter`, auf Basis eines Token-Bucket-Algorithmus in
-`shared.security.ratelimit`) die Anzahl zulässiger Login- und Registrierungsversuche je Client-IP (NFA-5);
-die Nutzer-Entität selbst führt zusätzlich die Felder `failedLoginAttempts` und `lockedUntil`, über die ein
-Konto nach wiederholten Fehlversuchen vorübergehend gesperrt wird (NFA-4). Autorisierung erfolgt zweistufig:
-Grobgranular über OAuth2-Scopes (`SCOPE_user`/`SCOPE_admin`, geprüft durch Spring Security), feingranular über
-die in Abschnitt 3.1.3 beschriebene 4-stufige, fail-closed Kaskade. Die Priorität der vier Regelstufen und das
+Authentifizierung erfolgt zustandslos über RS256-signierte JSON Web Token (Kapitel 2.2). Ein eigener
+Token-Aussteller validiert Benutzername und Passwort bzw. ein Refresh-Token und stellt im Erfolgsfall ein
+JWT aus. Die Signatur wird über ein beim ersten Start erzeugtes RSA-Schlüsselpaar geprüft; ein Verlust
+dieses Schlüssels entwertet alle zuvor ausgestellten Tokens. Damit ein eigentlich zustandsloses Token
+dennoch serverseitig widerrufen werden kann (NFA-6), führt das Zielsystem zwei Datenbanktabellen (`access_tokens`,
+`refresh_tokens`, Flyway-Migration `V1__init.sql`) mit je einem `revoked`-Flag und einem
+`revoked_at`-Zeitstempel; beide werden bei jeder Tokenprüfung zusätzlich zur Signatur konsultiert.
+`access_tokens` trägt zudem ein eindeutiges `jti`-Feld, über das ein einzelnes Token gezielt widerrufen
+werden kann, ohne alle Tokens des Nutzers ungültig zu machen. Ein `RateLimitingFilter`
+(`shared.security.filter`, Token-Bucket-Algorithmus) begrenzt zusätzlich die Login- und
+Registrierungsversuche je Client-IP (NFA-5); die Felder `failedLoginAttempts` und `lockedUntil` auf der
+Nutzer-Entität sperren ein Konto nach wiederholten Fehlversuchen vorübergehend (NFA-4).
+
+Autorisierung erfolgt zweistufig: grobgranular über OAuth2-Scopes (`SCOPE_user`/`SCOPE_admin`, geprüft durch
+Spring Security), feingranular über die 4-stufige, fail-closed Kaskade aus Abschnitt 3.1.2. Priorität und
 Fail-closed-Verhalten übernimmt das Zielsystem unverändert aus dem alten `PermissionCalculationService`
-(NFA-2). Für den in Abschnitt 3.2.4 beschriebenen, im alten Backend nicht spezifizierten Fall mehrerer
-gleichrangiger, widersprüchlicher Regeln innerhalb derselben Stufe führt die neue `PermissionService`-Klasse
-hingegen eine zusätzliche, deterministische Konfliktauflösung ein: Ein expliziter Deny-Eintrag wiegt stärker
-als ein Allow-Eintrag. Diese Regel ist eine bewusste Neuerung gegenüber dem alten Backend und schließt eine
-dort vorhandene Verhaltenslücke, statt eine bestehende Regel nachzubilden.
+(NFA-2). Für den Fall mehrerer gleichrangiger, widersprüchlicher Regeln innerhalb derselben Stufe – im
+alten Backend nicht spezifiziert (Abschnitt 3.2.3) – führt die neue `PermissionService`-Klasse eine
+zusätzliche, deterministische Konfliktauflösung ein: Ein expliziter Deny-Eintrag wiegt stärker als ein
+Allow-Eintrag. Diese Regel ist eine bewusste Neuerung gegenüber dem alten Backend und schließt eine dort
+vorhandene Verhaltenslücke.
 
 ### 3.4.3 Datenhaltung und Betrieb
 
-MariaDB dient, wie im alten Backend, als alleiniger Datenspeicher; das Schema wird jedoch ausschließlich
-über versionierte Flyway-Migrationsskripte unter `../../src/main/resources/db/migration` (`V1__init.sql` für das
-initiale Schema, gefolgt von inkrementellen Skripten wie `V2__registration_timestamps_to_instant.sql`,
-`V3__drop_desktop_name.sql` und `V4__desktop_group_description_only.sql`) verändert, während Hibernate die
-gemappten Entitäten beim Start lediglich gegen das bestehende Schema validiert (`ddl-auto: validate`), aber
-nie selbst Schemaänderungen vornimmt (NFA-10). Ein SMTP-Relay versendet, wie im alten Backend, Registrierungs- und
-Verifikations-E-Mails sowie
+MariaDB dient, wie im alten Backend, als alleiniger Datenspeicher. Das Schema wird jedoch ausschließlich
+über versionierte Flyway-Migrationsskripte unter `src/main/resources/db/migration` verändert (`V1__init.sql` für das
+initiale Schema, gefolgt von inkrementellen Skripten wie
+`V2__registration_timestamps_to_instant.sql`, `V3__drop_desktop_name.sql` und
+`V4__desktop_group_description_only.sql`). Hibernate validiert die gemappten Entitäten beim Start nur gegen
+das bestehende Schema (`ddl-auto: validate`) und nimmt nie selbst Schemaänderungen vor. Ein
+SMTP-Relay versendet, wie im alten Backend, Registrierungs- und Verifikations-E-Mails sowie
 Benachrichtigungen über angefragte Anwendungsfreischaltungen (FA-9), hier auf Basis von
-Thymeleaf-HTML-Vorlagen. Der Dienst ist als einzelnes Docker-Image paketiert (eine Spring-Boot-Fat-JAR), über
+Thymeleaf-HTML-Vorlagen. Der Dienst ist als einzelnes Docker-Image paketiert (Spring-Boot-Fat-JAR), über
 Umgebungsvariablen konfigurierbar (12-Factor-Prinzip, mit separaten Profilen `local`/`dev`/`prod`) und hält
 keinerlei Server-seitigen Sitzungszustand außerhalb der Datenbank bzw. des signierten Tokens selbst; mehrere
 Instanzen können daher hinter einem Load Balancer betrieben werden (NFA-7), sofern sie dasselbe
@@ -440,49 +437,48 @@ RSA-Schlüsselpaar und dieselbe Datenbank teilen.
 
 ### 3.4.4 Qualitätssicherung
 
-Die in NFA-8 und NFA-9 geforderte automatisierte Prüfung von Architektur und Testabdeckung wird im
-Zielsystem über zwei Build-Bausteine umgesetzt: Eine ArchUnit-Testklasse (`ArchitectureTest`,
-`../../src/test/java/de/frauas/design/backend/arch`) prüft bei jedem Build unter anderem, dass
-Controller nie direkt von anderen Controllern aufgerufen werden, dass Services nicht von Repositories
-abhängen, dass Entitäten (`model`) nur aus Service-, Repository-, Konfigurations- oder DTO-Code heraus
-referenziert werden, dass Klassen gemäß ihrer Spring-Annotation (`@Service`, `@Repository`,
-`@RestController`) im passenden Unterpaket liegen und dass ausschließlich Konstruktor-Injektion statt
-Feld-Injektion verwendet wird; JaCoCo erzwingt zusätzlich eine Mindest-Zeilenabdeckung von 70 % durch Tests.
-Beide Prüfungen sind, anders als beim alten Backend, verbindlicher Bestandteil des Builds und verhindern bei
-Verletzung das Zusammenführen von Änderungen, als unmittelbare technische Antwort auf die in der
-Ausschreibung kritisierte mangelnde Qualität und Dokumentation des Ist-Systems (Abschnitt 3.1.1). Das alte
-Backend ist dabei nicht völlig ohne automatisierte Prüfung: Eine PHPat-Testklasse
-(`tests/src/Arch/Main/BasicArchitectureTest.php`) stellt die Trennung der Top-Level-Module (`Core`,
-`Migrations`, `Test`, `Main`) sowie die komponistengebundene Isolation des `Util`-Moduls sicher. Sie prüft
-jedoch nicht die hier relevante interne Schichtenrichtung Controller → Service → Repository → Model
-innerhalb eines fachlichen Moduls; genau diese Lücke schließt NFA-8 im neuen Backend.
+NFA-8 und NFA-9 fordern eine automatisierte Prüfung von Architektur und Testabdeckung; das Zielsystem setzt
+dies über zwei Build-Bausteine um. Eine ArchUnit-Testklasse (`ArchitectureTest`,
+`src/test/java/de/frauas/design/backend/arch`) prüft bei jedem Build unter anderem, dass Controller nie
+direkt von anderen Controllern aufgerufen werden, dass Services nicht von Repositories abhängen, dass
+Entitäten (`model`) nur aus Service-, Repository-, Konfigurations- oder DTO-Code referenziert werden, dass
+Klassen gemäß ihrer Spring-Annotation (`@Service`, `@Repository`, `@RestController`) im passenden
+Unterpaket liegen und dass ausschließlich Konstruktor- statt Feld-Injektion verwendet wird. JaCoCo erzwingt
+zusätzlich eine Mindest-Zeilenabdeckung von 70 %. Beide Prüfungen sind, anders als beim alten Backend,
+verbindlicher Bestandteil des Builds: Bei Verletzung wird das Mergen von Änderungen verhindert – eine
+direkte technische Antwort auf die in der Ausschreibung kritisierte Qualität des Ist-Systems. Das alte Backend
+ist dabei nicht völlig ohne automatisierte Prüfung: Eine PHPat-Testklasse
+(`tests/src/Arch/Main/BasicArchitectureTest.php`) sichert die Trennung der Top-Level-Module (`Core`,
+`Migrations`, `Test`, `Main`) sowie die Isolation des `Util`-Moduls. Sie prüft jedoch nicht die hier
+relevante Schichtenrichtung Controller → Service → Repository → Model innerhalb eines fachlichen Moduls;
+genau diese Lücke schließt NFA-8 im neuen Backend.
 
 ## 3.5 Anwendungsfälle für den Prototyp
 
-Zur Demonstration der Funktionalität (AP5, Kapitel 4.7) wird der Prototyp des neuen Backends gegen die
-unveränderten Clients (Frontend, DaaS-Anwendung) über acht Anwendungsfälle gezeigt, die zusammen alle in
-Abschnitt 3.2.3 abgeleiteten funktionalen Anforderungen abdecken. Tabelle 3.6 gibt einen Überblick, die
-anschließenden Beschreibungen legen für jeden Anwendungsfall Vorbedingung, Ablauf und Nachbedingung fest.
+Zur Demonstration der Funktionalität (AP5, Kapitel 4.7) wird der Prototyp gegen die unveränderten Clients (Frontend,
+DaaS-Anwendung) über acht Anwendungsfälle gezeigt, die zusammen alle funktionalen Anforderungen
+aus Abschnitt 3.2.3 abdecken. Tabelle 3.6 gibt einen Überblick; die folgenden Beschreibungen legen für
+jeden Anwendungsfall Vorbedingung, Ablauf und Nachbedingung fest.
 
 *Tabelle 3.6: Anwendungsfälle für den Prototyp*
 
-| # | Anwendungsfall                                                                               | Beteiligte Module | Abgedeckte FA    |
-|---|----------------------------------------------------------------------------------------------|-------------------|------------------|
-| 1 | Login per Password Grant und anschließende Berechtigungsprüfung durch die DaaS-Anwendung     | auth, permission  | FA-1, FA-13      |
-| 2 | Token-Erneuerung per Refresh-Token-Grant                                                     | auth              | FA-2             |
-| 3 | Logout mit serverseitigem Tokenwiderruf                                                      | auth              | FA-3             |
-| 4 | Selbstregistrierung inkl. E-Mail-Verifikation                                                | user              | FA-5, FA-14      |
-| 5 | Admin legt Benutzer/Admin/Nutzergruppe an und (de)aktiviert Konten                           | user              | FA-6, FA-7, FA-8 |
-| 6 | Admin legt Desktop und Desktop-Gruppe an und verknüpft sie mit einer Nutzergruppe            | desktop           | FA-10, FA-11     |
-| 7 | DaaS-Anwendung fragt für eine gegebene Funktion und einen Nutzer die Zugriffsentscheidung ab | permission        | FA-13            |
-| 8 | Nutzer fragt Freischaltung einer Anwendung an (Benachrichtigungs-E-Mail an Admin)            | user              | FA-9             |
+| # | Anwendungsfall                                                                 | Module / FA                    |
+|---|--------------------------------------------------------------------------------|--------------------------------|
+| 1 | Login per Password Grant, danach Berechtigungsprüfung durch die DaaS-Anwendung | auth, permission / FA-1, FA-13 |
+| 2 | Token-Erneuerung per Refresh-Token-Grant                                       | auth / FA-2                    |
+| 3 | Logout mit serverseitigem Tokenwiderruf                                        | auth / FA-3                    |
+| 4 | Selbstregistrierung inkl. E-Mail-Verifikation                                  | user / FA-5, FA-14             |
+| 5 | Admin legt Benutzer/Admin/Nutzergruppe an und (de)aktiviert Konten             | user / FA-6, FA-7, FA-8        |
+| 6 | Admin legt Desktop/Desktop-Gruppe an und verknüpft sie mit einer Nutzergruppe  | desktop / FA-10, FA-11         |
+| 7 | DaaS-Anwendung fragt Zugriffsentscheidung für Funktion und Nutzer ab           | permission / FA-13             |
+| 8 | Nutzer fragt Freischaltung einer Anwendung an (Benachrichtigungs-E-Mail)       | user / FA-9                    |
 
-**AF-1: Login und Berechtigungsprüfung.** *Vorbedingung:* Ein aktiviertes Nutzerkonto existiert. *Ablauf:* Der Nutzer
-meldet sich über das Frontend mit Benutzername und Passwort an; das Backend stellt ein
-Zugriffs- und ein Refresh-Token aus. Der Nutzer löst daraufhin über das Frontend eine Aktion aus, die eine
-design-daas-Funktion betrifft; die DaaS-Anwendung fragt das Backend, ob der Nutzer diese Funktion aufrufen
-darf. *Nachbedingung:* Der Nutzer besitzt ein gültiges Token, und die DaaS-Anwendung erhält eine
-eindeutige Allow-/Deny-Antwort gemäß der 4-stufigen Kaskade.
+**AF-1: Login und Berechtigungsprüfung.** *Vorbedingung:* Ein aktiviertes Nutzerkonto existiert. *Ablauf:*
+Der Nutzer meldet sich über das Frontend mit Benutzername und Passwort an; das Backend stellt ein Zugriffs-
+und ein Refresh-Token aus. Löst der Nutzer anschließend eine Aktion aus, die eine DaaS-Funktion betrifft,
+fragt die DaaS-Anwendung beim Backend, ob er diese Funktion aufrufen darf. *Nachbedingung:* Der Nutzer
+besitzt ein gültiges Token, und die DaaS-Anwendung erhält eine eindeutige Allow-/Deny-Antwort gemäß der
+4-stufigen Kaskade.
 
 ```mermaid
 sequenceDiagram
@@ -541,10 +537,10 @@ unklaren Fall (unbekannter Nutzer, unbekannte Funktion, keine passende Regel) wi
 verweigert.
 
 **AF-8: Anfrage einer Anwendungsfreischaltung.** *Vorbedingung:* Ein angemeldeter Nutzer ist vorhanden. *Ablauf:* Der
-Nutzer fragt über das Frontend die Freischaltung einer bestimmten Anwendung an
-(`POST /user/request-application/{application}/{isoCode}`); das Backend versendet eine Benachrichtigungs-
-E-Mail an die zuständigen Administratoren. *Nachbedingung:* Die Administratoren sind informiert und können
-die Freischaltung außerhalb des hier beschriebenen Anwendungsfalls über AF-5/AF-6 vornehmen.
+Nutzer fragt über das Frontend die Freischaltung einer Anwendung an
+(`POST /user/request-application/{application}/{isoCode}`); das Backend versendet eine
+Benachrichtigungs-E-Mail an die zuständigen Administratoren. *Nachbedingung:* Die Administratoren sind
+informiert und können die Freischaltung über AF-5/AF-6 vornehmen.
 
 ---
 
@@ -559,8 +555,8 @@ die Freischaltung außerhalb des hier beschriebenen Anwendungsfalls über AF-5/A
     Open Journal of Cloud Computing (OJCC), vol. 8, no. 1, pp. 1-19, 2023.
 ```
 
-Beide Quellen sind Teil des vollständigen Literaturverzeichnisses in Kapitel 2. Alle übrigen Aussagen dieses
+Beide Quellen gehören zum vollständigen Literaturverzeichnis in Kapitel 2. Alle übrigen Aussagen dieses
 Kapitels stützen sich auf die offizielle Ausschreibung sowie auf die direkte Analyse des Quellcodes: des
-alten PHP-Backends (`design-daas-application-backend`, Abschnitt 3.1) und des im Rahmen dieser Arbeit
-entstandenen neuen Java-Backends (Abschnitt 3.4), jeweils einschließlich Konfigurationsdateien (`../../pom.xml`,
-`application.yml`), Datenbankmigrationen (`src/main/resources/db/migration`) und Testklassen (`src/test/java`).
+alten PHP-Backends (`design-daas-application-backend`, Abschnitt 3.1) und des neuen Java-Backends (Abschnitt
+3.4), jeweils einschließlich Konfigurationsdateien (`pom.xml`, `application.yml`), Datenbankmigrationen
+(`src/main/resources/db/migration`) und Testklassen (`src/test/java`).
