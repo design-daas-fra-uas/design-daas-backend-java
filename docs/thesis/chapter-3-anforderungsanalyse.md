@@ -237,7 +237,7 @@ Ausschreibung ermittelt. Dieses Vorgehen entspricht einer *Reverse-Engineering*-
 Anforderungen aus Interviews mit Stakeholdern oder einem Pflichtenheft abzuleiten, werden sie aus dem
 beobachtbaren Verhalten des bestehenden Systems rekonstruiert.
 
-### 3.2.2 Klärung der Hauptfunktionalität und Problemfeldabgrenzung
+### 3.2.1 Klärung der Hauptfunktionalität und Problemfeldabgrenzung
 
 Die Hauptfunktionalität lässt sich aus der Modulstruktur des alten Systems (Abschnitt 3.1.3) in vier
 Bereiche gliedern, die das neue Backend unverändert anbieten muss:
@@ -259,41 +259,36 @@ Berechtigungsauskünfte bereit, auf deren Basis die DaaS-Anwendung ihre eigenen 
 Ebenfalls außerhalb des Scopes liegen funktionale Änderungen an Frontend oder DaaS-Anwendung, die über die
 in Kapitel 1 genannten punktuellen Korrekturen hinausgehen.
 
-### 3.2.3 Ableitung der funktionalen Anforderungen
+### 3.2.2 Ableitung der funktionalen Anforderungen
 
-Die meisten funktionalen Anforderungen (FA) entsprechen mindestens einem Endpunkt aus Tabelle 3.2
-(Ist-Zustand des alten Backends) und werden so formuliert, dass sie unabhängig von der konkreten
-Implementierungssprache gelten: Sie beschreiben, welche Funktion das System erfüllen muss, nicht, mit
-welcher Klasse oder welchem Framework dies geschieht. Zwei Ausnahmen (FA-3, FA-14) haben kein unmittelbares
-Gegenstück im alten Backend und sind entsprechend gekennzeichnet; sie werden aus den in Abschnitt 3.2.4
-hergeleiteten nicht-funktionalen Anforderungen abgeleitet.
+Die meisten funktionalen Anforderungen (FA) entsprechen mindestens einem Endpunkt aus Tabelle 3.2 und sind
+unabhängig von der Implementierungssprache formuliert: Sie beschreiben, welche Funktion das System erfüllen
+muss, nicht, mit welcher Klasse oder welchem Framework dies geschieht. Eine Ausnahme (FA-3) hat kein Gegenstück
+im alten Backend; sie leitet sich aus den nicht-funktionalen Anforderungen in Abschnitt 3.2.4 ab.
 
 *Tabelle 3.4: Funktionale Anforderungen (FA)*
 
-| ID    | Anforderung                                                                                                                                                                                                              | Quelle (altes Backend)                    |
-|-------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------|
-| FA-1  | Ein Nutzer authentifiziert sich mit Benutzername und Passwort und erhält im Erfolgsfall ein Zugriffstoken (`POST /oauth2/user/token`, Password Grant)                                                                    | `league/oauth2-server` Password Grant     |
-| FA-2  | Ein abgelaufenes Zugriffstoken kann ohne erneute Eingabe von Zugangsdaten über ein Refresh-Token erneuert werden                                                                                                         | OAuth2-Modul, Refresh-Token-Mechanismus   |
-| FA-3  | Ein Nutzer kann sich aktiv abmelden; das zugehörige Token wird serverseitig widerrufen, auch wenn es formal noch nicht abgelaufen ist                                                                                    | kein Altsystem-Pendant; abgeleitet aus NFA-6 |
-| FA-4  | Zu einem gültigen Zugriffstoken kann die zugehörige Session/Identität abgefragt werden (`GET /oauth2/user/session`)                                                                                                      | OAuth2-Modul                              |
-| FA-5  | Ein neuer Nutzer kann sich selbst registrieren und muss seine E-Mail-Adresse über einen zeitlich begrenzten Code bestätigen, bevor das Konto nutzbar ist (`POST /user`, `/user/validate_email`)                          | User-Modul, `registrationCode` (24 h TTL) |
-| FA-6  | Ein Administrator kann Nutzer auflisten (paginiert), einsehen, ändern sowie aktivieren/deaktivieren (`GET /users`, `GET/PATCH /user/{id}`, `POST /user/{id}/enable`\|`/disable`)                                         | User-Modul                                |
-| FA-7  | Ein Administrator kann weitere Administratorkonten anlegen, auflisten und löschen (`GET /admins`, `POST /admin`, `DELETE /admin/{id}`)                                                                                   | Admin-Modul                               |
-| FA-8  | Ein Administrator kann Nutzergruppen anlegen, ändern und auflisten sowie mit einer Desktop-Gruppe verknüpfen (`POST /user_group`, `/user_groups`, `/user_group/{userGroupId}/{desktopGroupId}`)                         | UserGroup-Modul                           |
-| FA-9  | Ein Nutzer kann die Freischaltung einer bestimmten Anwendung anfragen; der zuständige Administrator wird per E-Mail benachrichtigt (`POST /user/request-application/{application}/{isoCode}`)                            | User-Modul                                |
-| FA-10 | Ein Administrator kann Desktops anlegen, einsehen und auflisten (`POST /desktop`, `GET /desktop/{id}`, `GET /desktops`)                                                                                                  | Desktop-Modul                             |
-| FA-11 | Ein Administrator kann Desktop-Gruppen anlegen, einsehen und mit Nutzergruppen verknüpfen (`POST /desktop-group`, `GET /desktop_group/{id}`, `POST /desktop_group/{id}/user_group/{userGroupId}`)                        | Desktop-Modul                             |
-| FA-12 | Ein Nutzer kann prüfen, ob er Zugriff auf einen bestimmten Desktop hat (über seine Nutzergruppen-/Desktop-Gruppen-Zuordnung, `GET /users/access/{desktopId}`)                                                            | User-Modul                                |
-| FA-13 | Für eine gegebene Funktion und einen gegebenen Nutzer kann geprüft werden, ob Zugriff erlaubt ist, über die 4-stufige Kaskade aus Abschnitt 3.1.3 (`GET /permissions/{functionName}/{userId}`, `POST /permissions_info`) | Permissions-Modul                         |
-| FA-14 | Ein Nutzer mit noch nicht bestätigter E-Mail-Adresse kann sich einen neuen Registrierungscode zusenden lassen, falls der ursprüngliche Code abgelaufen oder nicht angekommen ist                                        | kein Altsystem-Pendant; Usability-Ergänzung |
+| ID    | Anforderung                                                                                      |
+|-------|--------------------------------------------------------------------------------------------------|
+| FA-1  | Login mit Benutzername/Passwort liefert ein Zugriffstoken                                        |
+| FA-2  | Ein abgelaufenes Zugriffstoken kann per Refresh-Token erneuert werden, ohne erneute Zugangsdaten |
+| FA-3  | Aktives Abmelden widerruft das Token serverseitig, auch vor Ablauf                               |
+| FA-4  | Zu einem gültigen Token kann die Session/Identität abgefragt werden                              |
+| FA-5  | Selbstregistrierung mit E-Mail-Bestätigung über zeitlich begrenzten Code                         |
+| FA-6  | Admin kann Nutzer auflisten, einsehen, ändern, aktivieren/deaktivieren                           |
+| FA-7  | Admin kann weitere Admin-Konten anlegen, auflisten, löschen                                      |
+| FA-8  | Admin kann Nutzergruppen anlegen, ändern, auflisten und mit Desktop-Gruppe verknüpfen            |
+| FA-9  | Nutzer kann Anwendungsfreischaltung anfragen; Admin wird per E-Mail benachrichtigt               |
+| FA-10 | Admin kann Desktops anlegen, einsehen und auflisten                                              |
+| FA-11 | Admin kann Desktop-Gruppen anlegen, einsehen und mit Nutzergruppen verknüpfen                    |
+| FA-12 | Nutzer kann prüfen, ob er Zugriff auf einen Desktop hat                                          |
+| FA-13 | Prüfung, ob ein Nutzer eine Funktion aufrufen darf, über die 4-stufige Kaskade                   |
 
-Im Vergleich zum ersten Entwurf dieses Kapitels wurde FA-12 (Desktop-Zugriffsprüfung für Nutzer,
-`GET /users/access/{desktopId}`) ergänzt, da dieser Endpunkt im `User`-Controller des alten Backends separat
-vom allgemeinen Permissions-Endpunkt implementiert ist und eine eigene, Desktop-Gruppen-basierte Prüflogik
-besitzt, die nicht mit der generischen Funktions-/Endpunkt-Kaskade (FA-13) verwechselt werden darf. FA-3 und
-FA-14 wurden zudem als Anforderungen ohne direktes Altsystem-Pendant gekennzeichnet, nachdem die
-Quellcode-Prüfung von `OAuth2HttpController` und `UserHttpController` ergeben hat, dass das alte Backend
-weder einen Logout- noch einen Code-Neuversand-Endpunkt besitzt.
+Im Vergleich zum ersten Entwurf wurde FA-12 ergänzt, da dieser Endpunkt im `User`-Controller separat vom
+allgemeinen Permissions-Endpunkt implementiert ist und eine eigene, Desktop-Gruppen-basierte Prüflogik
+besitzt – nicht zu verwechseln mit der generischen Kaskade aus FA-13. FA-3 hat kein Altsystem-Pendant:
+Die Prüfung von `OAuth2HttpController` und `UserHttpController` zeigt, dass das alte Backend keinen
+Logout-Endpunkt besitzt.
 
 ### 3.2.4 Ableitung der nicht-funktionalen Anforderungen
 
