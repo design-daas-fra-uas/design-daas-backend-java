@@ -232,21 +232,10 @@ nicht angepasst; jede hier genannte Rahmenbedingung ist daher eine feste, nicht 
 
 ## 3.2 Klärung der Anforderungen
 
-Aufbauend auf der Ist-Analyse aus Abschnitt 3.1 leitet dieser Abschnitt den eigentlichen Anforderungskatalog
-ab: zunächst das methodische Vorgehen (3.2.1), danach die Abgrenzung der Hauptfunktionalität (3.2.2) und
-schließlich die daraus gewonnenen funktionalen (3.2.3) und nicht-funktionalen Anforderungen (3.2.4), die in
-Kapitel 4 umgesetzt und in Kapitel 5 evaluiert werden.
-
-### 3.2.1 Vorgehen
-
-Die Anforderungen wurden ausschließlich durch Quellcode-Analyse des alten PHP-Backends (Controller-, Service-
-und Entitätsklassen, Migrationsskripte, `composer.json`, siehe Abschnitt 3.1.3) sowie durch die
-Aufgabenstellung der Ausschreibung ermittelt. Eine gesonderte Gesprächsreihe mit dem Betreuer zur
-Anforderungsklärung hat über die in Abschnitt 3.3 genannten, fest vorgegebenen Abgabetermine hinaus nicht
-stattgefunden; die Anforderungen stützen sich daher ausschließlich auf die Ausschreibung und die Analyse
-des bestehenden Codes. Dieses Vorgehen entspricht einer *Reverse-Engineering*-Anforderungsanalyse: Statt
+Die Anforderungen wurden ausschließlich durch Quellcode-Analyse des alten PHP-Backends sowie durch die
+Ausschreibung ermittelt. Dieses Vorgehen entspricht einer *Reverse-Engineering*-Anforderungsanalyse: Statt
 Anforderungen aus Interviews mit Stakeholdern oder einem Pflichtenheft abzuleiten, werden sie aus dem
-beobachtbaren Verhalten eines bestehenden Systems rekonstruiert, dessen Ablösung gefordert ist.
+beobachtbaren Verhalten des bestehenden Systems rekonstruiert.
 
 ### 3.2.2 Klärung der Hauptfunktionalität und Problemfeldabgrenzung
 
