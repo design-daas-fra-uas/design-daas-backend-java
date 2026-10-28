@@ -290,36 +290,34 @@ besitzt – nicht zu verwechseln mit der generischen Kaskade aus FA-13. FA-3 hat
 Die Prüfung von `OAuth2HttpController` und `UserHttpController` zeigt, dass das alte Backend keinen
 Logout-Endpunkt besitzt.
 
-### 3.2.4 Ableitung der nicht-funktionalen Anforderungen
+### 3.2.3 Ableitung der nicht-funktionalen Anforderungen
 
 Die nicht-funktionalen Anforderungen (NFA) ergeben sich zum einen aus Eigenschaften, die das alte Backend
 bereits besitzt und die aus Kompatibilitätsgründen erhalten bleiben müssen (NFA-1 bis NFA-3), zum anderen
 aus generischen Sicherheits- und Betriebsanforderungen, die üblicherweise an einen Authentifizierungsdienst
 gestellt werden und die in Kapitel 2.2–2.4 theoretisch hergeleitet werden (NFA-4 bis NFA-7), sowie aus
 Qualitätszielen, die der Ausschreibung ausdrücklich entnommen sind: Das neue Backend soll, im Gegensatz zum
-alten, wart- und testbar sein (NFA-8 bis NFA-10).
+alten, wart- und testbar sein (NFA-8 und NFA-9).
 
 *Tabelle 3.5: Nicht-funktionale Anforderungen (NFA)*
 
-| ID     | Anforderung                                                                                                                                                                                                                                         | Begründung                                                                                                   |
-|--------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------|
-| NFA-1  | Fail-closed-Sicherheitsverhalten: Ein unbekannter Nutzer, eine unbekannte Funktion oder das Fehlen jeder passenden Regel führt stets zu Zugriffsverweigerung, nie zu impliziter Erlaubnis                                                           | Übernahme des Sicherheitsprinzips aus dem alten Backend (Abschnitt 3.1.3)                                    |
-| NFA-2  | Verhaltenskompatibilität der Berechtigungskaskade: identische Priorität der vier Regelstufen (direkte Nutzerregel vor Gruppenregel vor Endpunktgruppenregel vor Gruppen-Endpunktgruppenregel) sowie fail-closed als Voreinstellung wie im alten Backend | Die DaaS-Anwendung verlässt sich auf dieses Verhalten und wird nicht angepasst                               |
-| NFA-3  | API-Formkompatibilität: identische Pfade, HTTP-Methoden, JSON-Feldnamen und Statuscodes zu Frontend und DaaS-Anwendung wie beim alten Backend                                                                                                       | Beide Clients werden nicht angepasst (Kapitel 1, Abgrenzung)                                                 |
-| NFA-4  | Passwörter werden ausschließlich als Hash gespeichert; Konten werden nach wiederholten Fehlversuchen vorübergehend gesperrt                                                                                                                         | Sicherheit (Kapitel 2.2)                                                                                     |
-| NFA-5  | Sicherheitsrelevante Endpunkte (insbesondere Login, Registrierung) sind ratenbegrenzt                                                                                                                                                               | Schutz vor Missbrauch/Brute-Force (Kapitel 2.2)                                                              |
-| NFA-6  | Zugriffstoken sind serverseitig widerrufbar, obwohl sie als JSON Web Token grundsätzlich zustandslos und selbstbeschreibend sind                                                                                                                    | Ein Logout oder eine erzwungene Abmeldung durch einen Administrator muss sofort wirksam werden (Kapitel 2.2) |
-| NFA-7  | Der Dienst ist zustandslos und damit horizontal skalierbar; es existiert kein Server-seitiger Session-State außerhalb der Datenbank                                                                                                                 | Betriebsfähigkeit hinter einem Load Balancer                                                                 |
-| NFA-8  | Die interne Schichtung jedes fachlichen Moduls (Controller → Service → Repository → Model) wird automatisiert über den Build geprüft, nicht nur durch Konvention                                                                                    | Wartbarkeit; direkte Antwort auf die in der Ausschreibung kritisierte Qualität des alten Backends            |
-| NFA-9  | Eine Mindest-Testabdeckung wird im Build erzwungen und ein fehlgeschlagener Build verhindert das Mergen von Änderungen                                                                                                                              | Wartbarkeit/Qualitätssicherung                                                                               |
-| NFA-10 | Das Datenbankschema wird ausschließlich über versionierte, nachvollziehbare Migrationen verändert und nie automatisch aus dem Code generiert                                                                                                        | Nachvollziehbarkeit/Reproduzierbarkeit über Umgebungen hinweg                                                |
+| ID    | Anforderung                                                                                                                                                    |
+|-------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| NFA-1 | Fail-closed: Unbekannter Nutzer, unbekannte Funktion oder keine passende Regel führt immer zu Zugriffsverweigerung, nie zu impliziter Erlaubnis                |
+| NFA-2 | Gleiche Priorität der vier Regelstufen (Nutzerregel vor Gruppenregel vor Endpunktgruppenregel vor Gruppen-Endpunktgruppenregel) sowie fail-closed als Standard |
+| NFA-3 | Gleiche Pfade, HTTP-Methoden, JSON-Felder und Statuscodes wie im alten Backend                                                                                 |
+| NFA-4 | Passwörter nur als Hash; Konten werden nach wiederholten Fehlversuchen gesperrt                                                                                |
+| NFA-5 | Login und Registrierung sind ratenbegrenzt                                                                                                                     |
+| NFA-6 | Zugriffstoken sind serverseitig widerrufbar, obwohl JWTs grundsätzlich zustandslos sind                                                                        |
+| NFA-7 | Dienst ist zustandslos und horizontal skalierbar; kein Server-Session-State außerhalb der DB                                                                   |
+| NFA-8 | Interne Schichtung (Controller → Service → Repository → Model) wird automatisiert geprüft, nicht nur per Konvention                                            |
+| NFA-9 | Mindest-Testabdeckung wird im Build erzwungen; fehlgeschlagener Build verhindert Mergen                                                                        |
 
-Die Reihenfolge NFA-1 bis NFA-3 ist bewusst gewählt: Sie bilden zusammen die Bedingung, unter der das neue
-Backend als „funktional gleichwertig" zum alten gelten darf, und sind damit die Messlatte für die in Kapitel
-4.8 beschriebene Evaluation. NFA-2 beschränkt sich bewusst auf die Reihenfolge der vier Regelstufen und die
-Default-Deny-Regel, da genau dies die beiden Eigenschaften sind, auf die sich die DaaS-Anwendung laut
-Quellcode-Prüfung verlässt. Wie in Abschnitt 3.1.3 gezeigt, löst der alte
-`PermissionCalculationService` mehrere zueinander widersprüchliche Gruppenregeln desselben Nutzers
+Die Reihenfolge NFA-1 bis NFA-3 ist bewusst gewählt: Sie bilden die Bedingung, unter der das neue Backend
+als „funktional gleichwertig" zum alten gilt, und sind die Messlatte für die Evaluation in Kapitel 4.8.
+NFA-2 beschränkt sich bewusst auf Regelstufen-Reihenfolge und Default-Deny, da genau darauf sich die
+DaaS-Anwendung laut Quellcode-Prüfung verlässt. Wie in Abschnitt 3.1.3 gezeigt, löst der alte
+`PermissionCalculationService` mehrere widersprüchliche Gruppenregeln desselben Nutzers
 innerhalb einer Stufe nicht nach einer dokumentierten Regel auf, sondern nach der nicht spezifizierten
 internen Reihenfolge der Gruppen-Collection; dieses unspezifizierte Verhalten wird daher in NFA-2 bewusst
 nicht als nachzubildende Anforderung übernommen. Stattdessen wird in Abschnitt 3.4.2 eine zusätzliche,
