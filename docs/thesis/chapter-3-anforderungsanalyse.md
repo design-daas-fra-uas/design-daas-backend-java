@@ -332,28 +332,18 @@ folgenden vier Termine sind durch die Prüfungsordnung bzw. die Vorgaben des Pr�
 nicht verhandelbar; alle übrigen Meilensteine wurden davon ausgehend eigenständig in strikter, sequenzieller
 Abfolge der Arbeitspakete AP1–AP6 geplant, wie sie in der Ausschreibung vorgegeben sind.
 
-- **Start der Arbeit:** 22.06.2026
-- **Ende der Arbeit:** 25.11.2026
-- **Anforderungsanalyse an den Betreuer:** 29.06.2026 (1 Woche nach Start)
-- **Entwurf der Ausarbeitung:** 28.10.2026 (4 Wochen vor Abgabe)
-- **Vollständiger schriftlicher Entwurf:** 11.11.2026 (2 Wochen vor Abgabe)
-- **Abgabe im Prüfungsamt:** 25.11.2026
-
 Eigene Meilensteine (strikt sequenzielle Abfolge AP1–AP6):
 
 | Meilenstein                                                | Zeitraum                      |
 |------------------------------------------------------------|-------------------------------|
 | AP1 – Recherche Gesamtsystem DESIGN                        | 22.06.–29.06.2026             |
-| Abgabe der Anforderungsanalyse an den Betreuer             | 29.06.2026                    |
 | AP2 – Analyse altes PHP-Backend                            | 30.06.–13.07.2026             |
 | AP3 – Entwurf neues Backend (Konzept/Architektur)          | 14.07.–03.08.2026             |
-| AP4 – Implementierung neues Backend (Java/Spring Boot)     | 04.08.–21.09.2026             |
-| AP5 – Aufbau des Demonstrators                             | 22.09.–05.10.2026             |
-| AP6 – Test, Evaluation, Dokumentation                      | 06.10.–28.10.2026             |
+| AP4 – Implementierung neues Backend (Java/Spring Boot)     | 04.08.–02.10.2026             |
+| AP6 – Test, Evaluation, Dokumentation                      | 03.10.–28.10.2026             |
+| AP5 – Aufbau des Demonstrators                             | 29.10.–05.11.2026             |
 | Literaturrecherche / Kapitel 2 (theoretischer Hintergrund) | 22.06.–10.08.2026, begleitend |
 | Anfertigung der schriftlichen Ausarbeitung                 | 22.06.–11.11.2026, begleitend |
-| Abgabe des Entwurfs der Ausarbeitung an den Betreuer       | 28.10.2026                    |
-| Einarbeiten der Vorschläge des Betreuers                   | 28.10.–11.11.2026             |
 | Abgabe des vollständigen schriftlichen Entwurfs            | 11.11.2026                    |
 | Ende der Bearbeitungszeit, Einreichen im Prüfungsamt       | 25.11.2026                    |
 
