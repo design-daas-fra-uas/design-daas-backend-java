@@ -12,6 +12,12 @@ Vergleiche mit dem alten Backend beziehen sich auf `design-daas-application-back
 
 ## 4.1 Architekturentscheidungen
 
+Bevor im Folgenden die einzelnen Fachmodule im Detail beschrieben werden, klärt dieser Abschnitt die
+übergreifenden Architekturentscheidungen, die allen Modulen zugrunde liegen: die Gliederung des Quellcodes (4.1.2), ihre
+automatisierte Durchsetzung (4.1.3), die Wahl des Authentifizierungsmechanismus (4.1.4) und die
+Schemaverwaltung (4.1.5). Abschnitt 4.1.6 fasst diese Entscheidungen tabellarisch zusammen und ordnet sie den
+Anforderungen aus Kapitel 3 zu, bevor die Abschnitte 4.2–4.6 sie anhand von Code vertiefen.
+
 ### 4.1.1 Ausgangslage und Entscheidungsrahmen
 
 Die in Kapitel 3 abgeleiteten Anforderungen verlangen zweierlei gleichzeitig: Erstens muss das neue Backend
@@ -24,8 +30,8 @@ Zielsetzungen sie einzahlt.
 
 ### 4.1.2 Modulare Gliederung nach fachlicher Domäne
 
-Das alte PHP-Backend ist bereits vertikal in Module gegliedert (`Main`, `Util`, `OAuth2`, `User`, `Desktop`,
-`Permissions`; siehe `ARCHITECTURE.md` des PHP-Repos), jedes mit der internen Schichtung
+Das alte PHP-Backend ist bereits vertikal in Module gegliedert (Verzeichnisse `src/Main`, `src/Util`,
+`src/OAuth2`, `src/User`, `src/Desktop`, `src/Permissions`), jedes mit der internen Schichtung
 `Model → Repository → Service → Controller`. Diese Gliederung wurde für das neue Backend übernommen, jedoch
 umbenannt und auf vier fachliche Pakete konzentriert, die exakt den vier in Kapitel 3.4 beschriebenen
 Fähigkeitsgruppen entsprechen:
@@ -41,8 +47,7 @@ de.frauas.design.backend
 └── shared       (Querschnittscode: DTOs, Exceptions, Security, Utils)
 ```
 
-*Abbildung 4.1: Paketdiagramm der vier Fachmodule und des Querschnittscodes (grafische Darstellung des
-obigen Baums, mit Pfeilen für die in 4.1.3 erzwungenen Abhängigkeitsrichtungen).*
+*Code 4.1: Paketdiagramm der vier Fachmodule und des Querschnittscodes.*
 
 Jedes fachliche Paket folgt intern derselben Schichtung `controller → service → repository → model`
 (ergänzt um lokale `dto`- und `exception`-Unterpakete). Diese Entscheidung wurde getroffen, weil sie die
@@ -79,10 +84,12 @@ fehlschlagen – die Architektur ist damit nicht nur eine Absicht, sondern ein B
 direkte technische Antwort auf die in der Ausschreibung genannte mangelnde Qualität des Vorgängersystems und
 setzt NFA-8 ("Interne Schichtung wird automatisiert geprüft, nicht nur per Konvention") unmittelbar um.
 
-Bemerkenswert ist, dass auch das alte PHP-Backend bereits ein vergleichbares Werkzeug einsetzt: `PHPat`
-prüft laut `ARCHITECTURE.md` Modulabhängigkeitsregeln in der PHP-Codebasis. Die Neuerung liegt also nicht
-darin, Architekturtests grundsätzlich einzuführen, sondern darin, sie erstens auf die *interne* Schichtung
-jedes Moduls auszuweiten (`Controller → Service → Repository`, im PHP-Code nur durch Konvention, nicht durch
+Bemerkenswert ist, dass auch das alte PHP-Backend bereits ein vergleichbares Werkzeug einsetzt: Die Testklasse
+`tests/src/Arch/Main/BasicArchitectureTest.php` definiert mittels `PHPat` drei Regeln, die den Kern-Namensraum
+`Application\Core` vor Zugriffen von außerhalb isolieren und `Application\Migrations`/`Application\Test` als
+jeweils eigenständige, nicht querverlinkte Namensräume absichern. Die Neuerung liegt also nicht darin,
+Architekturtests grundsätzlich einzuführen, sondern darin, sie erstens auf die *interne* Schichtung jedes
+Moduls auszuweiten (`Controller → Service → Repository`, im PHP-Code nur durch Konvention, nicht durch
 `PHPat`-Regeln gesichert) und zweitens mit einer harten Testabdeckungsschranke zu kombinieren (Abschnitt
 4.8.1) – beides zusammen ergibt eine deutlich engmaschigere automatisierte Qualitätssicherung als im
 Ist-Zustand.
@@ -96,7 +103,7 @@ direkt per Formularparameter entgegennimmt – wie es der alte Vertrag mit dem F
 stattdessen eine schlanke Eigenimplementierung gewählt: ein selbst gebauter RS256-JWT-Aussteller (`TokenIssuer`) in
 Kombination mit Spring Securitys OAuth2-Resource-Server-Validierung (`JwtDecoder`). Diese
 Entscheidung vermeidet den Konfigurationsaufwand eines vollständigen Autorisierungsservers für einen
-Vertrag, der ohnehin nur zwei Grant-Typen abdeckt (vgl. `../ARC42.md`, Abschnitt 9, ADR-Tabelle).
+Vertrag, der ohnehin nur zwei Grant-Typen abdeckt.
 
 ### 4.1.5 Schema ausschließlich über Flyway
 
@@ -127,6 +134,13 @@ Jede Zeile wird in den nachfolgenden Abschnitten 4.2–4.6 anhand von Code verti
 ---
 
 ## 4.2 Authentifizierung
+
+Das Fachmodul `auth` setzt die in Kapitel 3.2 beschriebenen Authentifizierungs-Anwendungsfälle FA-1 bis FA-4
+um: Login per Benutzername/Passwort (FA-1), Token-Erneuerung (FA-2), Logout (FA-3) und Session-Introspektion (FA-4). Die
+folgenden Abschnitte folgen dabei bewusst dem tatsächlichen Kontrollfluss einer Anfrage: vom
+Dispatch der Grant-Art (4.2.1) über die eigentliche Passwort-Prüfung mit ihren Sicherheitsmaßnahmen (4.2.2),
+die Ausstellung der Tokens (4.2.3) und deren Erneuerung (4.2.4), bis zu Logout/Introspektion (4.2.5) und den
+beiden Querschnittsmaßnahmen Ratenbegrenzung (4.2.6) und deren nebenläufigkeitssichere Implementierung (4.2.7).
 
 ### 4.2.1 Grant-Dispatch
 
@@ -241,8 +255,7 @@ Die Wahl von **RS256** (asymmetrisch, privater Schlüssel signiert, öffentliche
 eines symmetrischen Verfahrens wie HS256 bedeutet, dass der öffentliche Schlüssel verteilt werden könnte,
 ohne das Signier-Geheimnis preiszugeben – relevant, falls künftig ein separater Dienst nur Tokens validieren,
 aber nicht ausstellen soll. Das Schlüsselpaar wird beim ersten Start erzeugt und unter `OAUTH_KEYS_DIR`
-persistiert; ein Verlust dieser Datei entwertet alle zuvor ausgestellten Tokens (dokumentiertes Risiko, siehe
-`../ARC42.md` Abschnitt 11).
+persistiert; ein Verlust dieser Datei entwertet alle zuvor ausgestellten Tokens.
 
 Da JWTs normalerweise zustandslos und damit serverseitig nicht widerrufbar sind, speichert das Backend
 zusätzlich jede ausgestellte `jti` in der Datenbank (`access_tokens`) mit einem `revoked`-Flag – ein bewusster
@@ -382,14 +395,26 @@ der CAS-Wiederholungspfad), ergänzend zum obigen Codeausschnitt.*
 
 ## 4.3 Autorisierung / Berechtigungskaskade
 
+Während Abschnitt 4.2 klärt, *wer* ein Nutzer ist (Authentifizierung), entscheidet das Fachmodul
+`permission`, *was* dieser Nutzer tun darf. Es implementiert FA-13 ("Berechtigungsprüfung pro
+DaaS-Funktion") und ist damit die sicherheitskritischste Komponente des Backends, da die Python-DaaS-Anwendung
+vor jedem Funktionsaufruf genau diese Entscheidung abfragt. Die folgenden Abschnitte beschreiben zunächst die
+Portierung der eigentlichen Kaskadenlogik (4.3.1) und zwei Detailfragen, die im alten Code nicht abschließend
+geklärt waren: Konflikte innerhalb einer Kaskadenstufe (4.3.2) und der Umgang mit fehlerhafter Eingabe (4.3.3).
+Abschnitt 4.3.4 erläutert eine Performance-Optimierung, Abschnitt 4.3.5 die resultierende
+Testabdeckung.
+
 ### 4.3.1 Portierung der PHP-Logik
 
-Das alte Backend entscheidet über `PermissionCalculationService::getPermission($functionName, $userId)` nach
-einer vierstufigen Prioritätsliste (siehe `ARCHITECTURE.md` des PHP-Repos, Abschnitt 8): direkte
-Nutzer-Endpunkt-Regel, Nutzergruppen-Endpunkt-Regel, Nutzer-Endpunktgruppen-Regel,
-Nutzergruppen-Endpunktgruppen-Regel, mit Rückfall auf `DENY`. Diese exakte Semantik musste erhalten bleiben,
-da die Python-DaaS-Anwendung ihre Berechtigungsprüfungen unverändert gegen das neue Backend stellt (NFA-2/NFA-3). Die
-neue `PermissionService.checkPermission`-Methode bildet die vier Stufen 1:1 nach:
+Das alte Backend entscheidet über `PermissionCalculationService::getPermission()` nach einer vierstufigen
+Prioritätsliste. Der tatsächliche PHP-Quellcode (`src/Permissions/Service/PermissionCalculationService.php`)
+zeigt diese vier Stufen als eine Folge von frühen Rückgaben: zunächst eine direkte Nutzer-Endpunkt-Regel,
+danach — innerhalb einer Schleife über alle Gruppen des Nutzers — eine Nutzergruppen-Endpunkt-Regel, danach
+eine Nutzer-Endpunktgruppen-Regel und schließlich, wieder innerhalb einer Gruppen-Schleife, eine
+Nutzergruppen-Endpunktgruppen-Regel, mit `AccessEnum::DENY` als Rückfall, falls keine Regel greift. Diese
+exakte Reihenfolge musste erhalten bleiben, da die Python-DaaS-Anwendung ihre Berechtigungsprüfungen
+unverändert gegen das neue Backend stellt (NFA-2/NFA-3). Die neue `PermissionService.checkPermission`-Methode
+bildet die vier Stufen 1:1 nach, jedoch mit `Optional#or` statt verschachtelter `foreach`-Schleifen:
 
 ```java
 Optional<Boolean> allow = checkDirectUserRule(userId, functionName)
@@ -437,11 +462,17 @@ private <T> Optional<Boolean> resolveStepDecision(
 ```
 
 Diese "explizite Verweigerung gewinnt"-Regel ist eine bewusste, zusätzlich zum ursprünglichen Verhalten im
-Javadoc der Klasse dokumentierte Entscheidung und verhindert, dass eine einzelne großzügige Gruppenregel eine
-andernorts bewusst gesetzte Sperre aushebelt – ein sicherheitsrelevantes Detail, das in der schlecht
-dokumentierten PHP-Implementierung laut Ausschreibung nicht nachvollziehbar war und daher im Rahmen von AP2
-eigens analysiert und hier explizit spezifiziert wurde. Der `log.warn`-Aufruf bei mehrdeutigen Treffern macht
-diesen Fall zusätzlich im Betrieb beobachtbar, ohne die Entscheidung selbst zu verändern.
+Javadoc der Klasse dokumentierte Entscheidung. Im PHP-Original (`PermissionCalculationService::getPermission`)
+iteriert eine `foreach`-Schleife über die Gruppen des Nutzers und gibt beim **ersten** Treffer sofort zurück
+(`return $endpointUserGroupAccess->relation();`); ist ein Nutzer Mitglied zweier Gruppen mit widersprüchlichen
+Regeln für dieselbe Funktion, hängt das Ergebnis dort also von der – nirgends spezifizierten –
+Iterationsreihenfolge der Gruppenzuordnung ab. Die neue Implementierung ersetzt dieses zufällige Verhalten
+durch eine deterministische, sicherheitsorientierte Regel: Ein einzelnes explizites `deny` wiegt stärker als
+beliebig viele `allow`-Einträge derselben Stufe. Dies verhindert, dass eine einzelne großzügige Gruppenregel
+eine andernorts bewusst gesetzte Sperre aushebelt, und wurde im Rahmen von AP2 eigens als Abweichung vom
+(undokumentierten) PHP-Verhalten analysiert und hier explizit spezifiziert. Der `log.warn`-Aufruf bei
+mehrdeutigen Treffern macht diesen Fall zusätzlich im Betrieb beobachtbar, ohne die Entscheidung selbst zu
+verändern.
 
 ### 4.3.3 Fail-closed bei fehlerhafter Eingabe
 
