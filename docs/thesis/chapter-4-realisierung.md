@@ -538,6 +538,14 @@ HTTP-Endpunkt (Abschnitt 4.8.2).
 
 ## 4.4 Benutzerverwaltung
 
+Das Fachmodul `user` deckt die Anwendungsfälle FA-5 (Registrierung mit E-Mail-Verifikation), FA-6 (Admin-Verwaltung
+regulärer Nutzer), FA-7 (Admin legt weitere Admin-Konten an), FA-8 (User-Groups) und FA-9 (Anwendungsfreischaltung) aus
+Kapitel 3.2 ab. Die Abschnitte 4.4.1–4.4.2 folgen dem Lebenszyklus eines
+Nutzerkontos von der Registrierung bis zur administrativen Verwaltung; Abschnitt 4.4.3 ordnet User-Groups als
+Bindeglied zu den Modulen `permission` und `desktop` ein; die Abschnitte 4.4.4–4.4.5 beschreiben zwei
+Funktionen, die zwar fachlich zum Modul gehören, aber nicht Teil des eigentlichen Registrierungs-Lebenszyklus
+sind.
+
 ### 4.4.1 Registrierung mit E-Mail-Verifikation
 
 `UserService.createUser` legt einen zunächst **deaktivierten** Nutzer an, generiert einen 8-stelligen
@@ -743,6 +751,13 @@ Paketgliederung aus 4.1.2).
 
 ## 4.5 Desktop-Inventar
 
+Das Fachmodul `desktop` setzt FA-10 bis FA-12 (Desktop-/Desktopgruppen-Verwaltung sowie Zugriffsprüfung) um
+und bildet damit die fachliche Brücke zwischen Nutzerverwaltung (4.4) und der von der DaaS-Anwendung
+tatsächlich bereitgestellten Infrastruktur. Da dieses Modul am wenigsten sicherheitskritische Logik enthält,
+konzentrieren sich die folgenden beiden Abschnitte auf zwei Entwurfsentscheidungen, die direkt aus den
+Datenintegritätsanforderungen (NFA-8) abgeleitet sind: die Abgrenzung des Inventars von der Bereitstellung (4.5.1) und
+die bidirektionale n:m-Verknüpfung mit User-Groups (4.5.2).
+
 ### 4.5.1 Reines Inventar, keine Bereitstellung
 
 `DesktopService` verwaltet ausschließlich Metadaten zu virtuellen Desktops und Desktop-Groups; die
@@ -817,6 +832,12 @@ Abbildung 4.5).*
 
 ## 4.6 Querschnittsthemen
 
+Die folgenden sechs Themen betreffen keines der vier Fachmodule allein, sondern durchziehen den gesamten
+Code: die Sicherheitsfilterkette, die jede Anfrage passiert (4.6.1), einheitliche Fehlerbehandlung (4.6.2),
+Eingabevalidierung (4.6.3), CORS/Protokollierung/PII-Schutz (4.6.4), die generierte API-Dokumentation (4.6.5)
+sowie ein geplanter Aufräummechanismus (4.6.6). Sie bündeln damit genau jene Aspekte, die in 4.1.2 als
+`shared`-Paket von den Fachmodulen getrennt wurden.
+
 ### 4.6.1 Sicherheitsfilterkette
 
 `SecurityConfig` konfiguriert eine zustandslose Filterkette: CSRF ist deaktiviert (keine Cookies/Sessions),
@@ -879,6 +900,7 @@ requestMatchers(SWAGGER_ENDPOINTS).
 
 hasAuthority(Authorities.SCOPE_ADMIN);
             }
+
                     auth.
 
 anyRequest().
@@ -1066,6 +1088,14 @@ kommunizieren production-seitig über exakt dieselben, hier vorgeführten HTTP-S
 
 ## 4.8 Tests & Evaluation (AP6)
 
+Nachdem die Abschnitte 4.1–4.7 beschrieben haben, *wie* die Anforderungen aus Kapitel 3 umgesetzt wurden,
+belegt dieser letzte Abschnitt des Kapitels, *dass* diese Umsetzung tatsächlich funktioniert und die
+eingangs in Kapitel 1 formulierten Qualitätsziele erfüllt. Dazu werden zunächst die im Build automatisch
+erzwungenen Qualitätsschranken erläutert (4.8.1), anschließend Art und Umfang der Testsuite (4.8.2) sowie die
+tatsächlich erreichte Testabdeckung (4.8.3) dargestellt. Abschnitt 4.8.4 ordnet eine bewusst in Kauf
+genommene Einschränkung ein, Abschnitt 4.8.5 schließt das Kapitel mit einem belastbaren, quellcodebasierten
+Vergleich zwischen altem und neuem Backend.
+
 ### 4.8.1 Automatisierte Qualitätssicherung im Build
 
 Der Build (`mvn verify`) erzwingt zwei automatisierte Qualitätsschranken: die 19 ArchUnit-Regeln aus 4.1.3
@@ -1170,8 +1200,8 @@ Zähler-Abbau statt alles-oder-nichts-Reset) wieder aufgegriffen.
 ### 4.8.5 Vergleich mit dem alten Backend
 
 Tabelle 4.4 stellt die wichtigsten Qualitätssicherungsmaßnahmen beider Backends gegenüber. Grundlage sind die
-tatsächlichen Konfigurationsdateien beider Repositories (`pom.xml` dieses Projekts; `phpunit.xml`,
-`phpstan.neon.dist`, `ARCHITECTURE.md` des PHP-Projekts), nicht nur deren Dokumentation.
+tatsächlichen Konfigurationsdateien und Quelltexte beider Repositories (`pom.xml` dieses Projekts; `phpunit.xml`,
+`composer.json` und `tests/src/Arch/Main/BasicArchitectureTest.php` des PHP-Projekts), nicht deren Dokumentation.
 
 *Tabelle 4.4: Qualitätssicherung, altes Backend (PHP) vs. neues Backend (Java)*
 
