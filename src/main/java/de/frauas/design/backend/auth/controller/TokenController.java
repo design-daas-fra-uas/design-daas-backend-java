@@ -44,6 +44,9 @@ public class TokenController {
     /**
      * Issues (or refreshes) an OAuth2 access/refresh token pair.
      *
+     * <p>Only form-encoded parameters are accepted, as required by RFC 6749 §4.3.2 and §6.
+     * A JSON body is rejected with 415 instead of being silently ignored.</p>
+     *
      * @param grantType    {@code "password"} or {@code "refresh_token"}; any other
      *                     value results in an {@code unsupported_grant_type} error
      * @param username     resource-owner email; required for the password grant
@@ -53,9 +56,7 @@ public class TokenController {
      *                     defaults to the user's primary role scope when omitted
      * @return the issued token pair, serialized as the standard OAuth2 token response
      */
-    @PostMapping(
-            value = "/token",
-            consumes = {MediaType.APPLICATION_FORM_URLENCODED_VALUE, MediaType.APPLICATION_JSON_VALUE})
+    @PostMapping(value = "/token", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     public ResponseEntity<TokenResponseDto> token(
             @RequestParam("grant_type") String grantType,
             @RequestParam(value = "username", required = false) String username,

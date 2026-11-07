@@ -12,7 +12,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  *
  * @param userId the user's numeric id (the JWT's {@code sub} claim)
  * @param name   the user's display name
+ * @param role   the user's current role ({@code admin} or {@code user}),
+ *               read from the database, so a role change applies to existing tokens
  */
 public record SessionInfoDto(
         @JsonProperty("user_id") Integer userId,
-        @JsonProperty("name") String name) {}
+        @JsonProperty("name") String name,
+        @JsonProperty("role") String role) {}

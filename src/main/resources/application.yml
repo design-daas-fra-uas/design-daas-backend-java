@@ -49,7 +49,7 @@ spring:
 
 app:
   admin-initializer:
-    enabled: true
+    enabled: ${ADMIN_INIT_ENABLED:true}
     email: ${ADMIN_EMAIL:admin@design.local}
     password: ${ADMIN_PASSWORD:Admin123!}
   oauth2:

@@ -66,5 +66,10 @@ public abstract class BaseUser {
     @Column(name = "locked_until")
     private Instant lockedUntil;
 
+    /**
+     * Returns the account's role, which is also its only OAuth2 scope.
+     *
+     * @return {@code "admin"} or {@code "user"}, matching the {@code role} discriminator column
+     */
     public abstract String getRole();
 }

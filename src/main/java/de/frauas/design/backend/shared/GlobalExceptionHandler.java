@@ -38,18 +38,21 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
+    /** Maps "not found" exceptions (e.g. {@code UserNotFoundException}) to 404. */
     @ExceptionHandler(NoSuchElementException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(NoSuchElementException ex) {
         log.warn("404 Not Found: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(ex.getMessage()));
     }
 
+    /** Maps invalid input detected by services (e.g. a weak password or unknown group ids) to 400. */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleBadRequest(IllegalArgumentException ex) {
         log.warn("400 Bad Request: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(ex.getMessage()));
     }
 
+    /** Maps {@link ConflictException} subtypes (e.g. a duplicate association) to 409. */
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ErrorResponse> handleConflict(ConflictException ex) {
         log.warn("409 Conflict: {}", ex.getMessage());
@@ -67,6 +70,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .body(new ErrorResponse("The request conflicts with existing data"));
     }
 
+    /** Bean-validation failures on method parameters, rendered as {@code path: message, ...} with 400. */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
         String msg = ex.getConstraintViolations().stream()
@@ -76,6 +80,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(msg));
     }
 
+    /** Maps a failed {@code @PreAuthorize} check to 403 without revealing which rule failed. */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
         log.warn("403 Access denied");

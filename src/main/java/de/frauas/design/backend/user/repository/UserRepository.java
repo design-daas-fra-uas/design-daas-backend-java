@@ -38,5 +38,6 @@ public interface UserRepository extends JpaRepository<BaseUser, Integer> {
     @Query("SELECT ug.id FROM User u JOIN u.groups ug WHERE u.id = :userId")
     List<Integer> findGroupIdsByUserId(@Param("userId") Integer userId);
 
+    /** Returns whether any account (user or admin) already uses this e-mail address. */
     boolean existsByEmail(String email);
 }

@@ -8,5 +8,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface DesktopGroupRepository extends JpaRepository<DesktopGroup, Integer> {
 
+    /** Returns whether a desktop group with this description exists (descriptions are unique). */
     boolean existsByDescription(String description);
 }

@@ -7,6 +7,7 @@ import lombok.Data;
 
 import java.util.List;
 
+/** Response payload for regular-user endpoints; {@code groups} holds the user's group IDs. */
 @Data
 @Builder
 public class UserDto {

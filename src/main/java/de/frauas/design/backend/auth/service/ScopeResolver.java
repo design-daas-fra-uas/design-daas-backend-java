@@ -22,7 +22,7 @@ public class ScopeResolver {
      * Returns the scope to grant for this user's role, checking that the client
      * didn't request a different one.
      *
-     * <p>Each role has exactly one scope (its own name: {@code admin}, {@code expert},
+     * <p>Each role has exactly one scope (its own name: {@code admin}
      * or {@code user}) — there's no downgrading to a lower scope. If the client
      * requests no scope, the user's role is returned. If the client requests any
      * scope other than their own role, an {@link InvalidScopeException} is thrown.</p>

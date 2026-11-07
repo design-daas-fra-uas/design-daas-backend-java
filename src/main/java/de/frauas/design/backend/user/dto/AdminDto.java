@@ -4,6 +4,7 @@ import de.frauas.design.backend.user.model.Admin;
 import lombok.Builder;
 import lombok.Data;
 
+/** Response payload for admin endpoints. Admins have no groups and are always enabled on creation. */
 @Data
 @Builder
 public class AdminDto {

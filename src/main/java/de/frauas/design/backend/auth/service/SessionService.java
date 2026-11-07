@@ -85,7 +85,7 @@ public class SessionService {
 
         String scope = parseScopeClaim(jwt);
         log.info("getSession — session valid userId={} role={} scope={}", userId, user.getRole(), scope);
-        return new SessionInfoDto(userId, user.getName());
+        return new SessionInfoDto(userId, user.getName(), user.getRole());
     }
 
     /**

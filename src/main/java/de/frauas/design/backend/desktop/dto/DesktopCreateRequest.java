@@ -10,7 +10,8 @@ import java.util.List;
 /**
  * Request DTO for POST /desktop.
  * The Frontend sends { "description": "...", "groups": [{ "description": "..." }] }.
- * Each subgroup is named after its description.
+ * Each entry in {@code groups} creates a new desktop group with that description, which
+ * must be unique.
  */
 @Data
 public class DesktopCreateRequest {
