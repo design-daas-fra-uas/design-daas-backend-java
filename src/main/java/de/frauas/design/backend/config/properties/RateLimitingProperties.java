@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * Configuration for API rate limiting and brute-force protection.
  *
- * <p>Limits are applied per client IP address using a sliding
+ * <p>Limits are applied per client IP address using a
  * token-bucket strategy. Rate limiting can be disabled for tests
  * or other environments through {@code app.rate-limiting.enabled}.</p>
  */

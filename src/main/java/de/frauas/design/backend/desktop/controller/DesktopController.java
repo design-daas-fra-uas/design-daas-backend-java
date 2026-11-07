@@ -50,8 +50,8 @@ public class DesktopController {
 
     /**
      * Creates a new desktop, optionally cascade-creating desktop subgroups for it.
-     * Business rules (e.g. each subgroup being named after its description) are enforced
-     * by {@link DesktopService#createDesktop}, not here.
+     * Business rules (e.g. each subgroup description being unique) are enforced by
+     * {@link DesktopService#createDesktop}, not here.
      *
      * @param request the desktop to create
      * @return 201 Created with no body

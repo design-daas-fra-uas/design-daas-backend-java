@@ -134,6 +134,7 @@ class SessionServiceTest {
 
         assertThat(result.userId()).isEqualTo(1);
         assertThat(result.name()).isEqualTo("User 1");
+        assertThat(result.role()).isEqualTo("user");
     }
 
     @Test

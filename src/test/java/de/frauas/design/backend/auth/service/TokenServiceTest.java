@@ -40,7 +40,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -54,6 +53,7 @@ class TokenServiceTest {
     private static final String EMAIL = "user@example.com";
     private static final String PASSWORD = "correct-password";
     private static final String HASH = "$2a$10$hashedvalue";
+    private static final String DUMMY_HASH = "$2a$12$dummyhashvalue";
 
     @Mock
     UserRepository userRepository;
@@ -139,13 +139,15 @@ class TokenServiceTest {
         @DisplayName("throws InvalidCredentialsException(401) and still checks BCrypt (SEC-H4) when user is unknown")
         void unknownUser_returnsUnauthorizedAndRunsDummyHash() {
             when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
+            when(passwordEncoder.encode(anyString())).thenReturn(DUMMY_HASH);
 
             assertThatThrownBy(() -> tokenService.passwordGrant(EMAIL, PASSWORD, ""))
                     .isInstanceOf(InvalidCredentialsException.class)
                     .extracting(ex -> ((InvalidCredentialsException) ex).getStatus())
                     .isEqualTo(401);
-            // SEC-H4: BCrypt must still run against the dummy hash to avoid timing-based enumeration
-            verify(passwordEncoder).matches(eq(PASSWORD), anyString());
+            // SEC-H4: BCrypt must still run against the dummy hash to avoid timing-based enumeration.
+            // The dummy hash comes from the configured encoder, so it has the same cost as real hashes.
+            verify(passwordEncoder).matches(PASSWORD, DUMMY_HASH);
         }
 
         @Test

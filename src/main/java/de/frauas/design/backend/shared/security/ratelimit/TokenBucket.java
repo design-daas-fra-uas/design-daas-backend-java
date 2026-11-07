@@ -3,11 +3,14 @@ package de.frauas.design.backend.shared.security.ratelimit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Thread-safe token bucket implementing a continuous refill rate.
+ * Thread-safe token bucket for per-client rate limiting.
  *
- * <p>The bucket starts full and refills continuously at a rate equivalent
- * to {@code capacity} tokens per refill period. A successful request consumes
- * one token.</p>
+ * <p>The bucket starts full and refills at a rate equivalent to {@code capacity}
+ * tokens per refill period. A successful request consumes one token.</p>
+ *
+ * <p>Known limitation: every successful request moves the refill timestamp to "now"
+ * (truncated to whole seconds) and drops any fractional token, so under steady
+ * traffic the bucket refills more slowly than the configured rate.</p>
  *
  * <p>The implementation stores the current token count and last refill time
  * using atomic state and does not require explicit locking.</p>
@@ -18,7 +21,7 @@ final class TokenBucket {
     private final double refillTokensPerMillisecond;
 
     /**
-     * Packed state: [epochMinute (32 bits) | consumedThisMinute (32 bits)]
+     * Packed state: [last refill time in epoch seconds (high 32 bits) | available tokens (low 32 bits)]
      */
     private final AtomicLong state;
 

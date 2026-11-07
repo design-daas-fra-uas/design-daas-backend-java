@@ -51,7 +51,10 @@ public class SecurityConfig {
                             .permitAll();
                     auth.requestMatchers(HttpMethod.POST, "/user/resend_code").permitAll();
                     auth.requestMatchers(HttpMethod.POST, "/oauth2/user/token").permitAll();
-                    auth.requestMatchers(HttpMethod.GET, "/version").permitAll();
+                    // Health probes (Docker, Kubernetes, load balancers) cannot send a token.
+                    // Only the overall status is exposed; component details stay hidden.
+                    auth.requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**")
+                            .permitAll();
 
                     if (securityProperties.isSwaggerPublic()) {
                         auth.requestMatchers(SWAGGER_ENDPOINTS).permitAll();

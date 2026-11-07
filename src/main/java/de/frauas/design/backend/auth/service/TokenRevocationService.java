@@ -70,6 +70,12 @@ public class TokenRevocationService {
         log.info("revokeAllForUser — userId={} accessTokens={} refreshTokens={}", userId, access, refresh);
     }
 
+    /**
+     * Revokes all of a user's tokens when the user module reports that their sessions
+     * must end (account disabled or password changed).
+     *
+     * @param event identifies the affected user
+     */
     @EventListener
     @Transactional
     public void onUserSessionsInvalidated(UserSessionsInvalidatedEvent event) {

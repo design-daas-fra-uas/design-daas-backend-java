@@ -16,6 +16,7 @@ import de.frauas.design.backend.auth.repository.RefreshTokenRepository;
 import de.frauas.design.backend.shared.util.LogMasking;
 import de.frauas.design.backend.user.model.BaseUser;
 import de.frauas.design.backend.user.repository.UserRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,9 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.UUID;
 
 /**
- * Handles logging in, refreshing tokens, and logging out.
+ * Handles logging in and refreshing tokens.
  *
  * <p>Login (password grant): checks the username/password, makes sure the account
  * isn't locked or disabled, checks the requested scope is allowed, then issues a new
@@ -49,11 +51,6 @@ import java.time.Instant;
 public class TokenService {
 
     /**
-     * Dummy BCrypt hash used when a user is not found so that the
-     * response time is indistinguishable from a wrong-password attempt.
-     */
-    private static final String DUMMY_HASH = "$2a$10$7EqJtq98hPqEX7fNZaFWoOa3G5Wq/8rEjMvT6T3E2z3aJEOv5bIfy";
-    /**
      * Token type advertised to clients, per RFC 6749 §5.1.
      */
     private static final String BEARER_TOKEN_TYPE = "Bearer";
@@ -65,6 +62,14 @@ public class TokenService {
     private final ScopeResolver scopeResolver;
     private final TokenIssuer tokenIssuer;
     private final Clock clock;
+
+    /**
+     * Hash checked when a user is not found so that the response time is
+     * indistinguishable from a wrong-password attempt. Created with the configured
+     * {@link PasswordEncoder} (not hard-coded) so it always uses the same BCrypt cost
+     * as real password hashes; a cheaper hash would make unknown e-mails answer faster.
+     */
+    private volatile String dummyHash;
 
     // -------------------------------------------------------------------------
     // Grant dispatch
@@ -112,7 +117,7 @@ public class TokenService {
         var userOpt = userRepository.findByEmail(username);
         if (userOpt.isEmpty()) {
             // always run BCrypt to prevent timing-based user enumeration
-            passwordEncoder.matches(password, DUMMY_HASH);
+            passwordEncoder.matches(password, dummyHash());
             log.warn("passwordGrant — unknown user={}", LogMasking.maskEmail(username));
             throw new InvalidCredentialsException();
         }
@@ -205,6 +210,24 @@ public class TokenService {
                 LogMasking.maskEmail(user.getEmail()),
                 user.getId());
         return buildTokenResponse(newAccessToken, newRefreshToken, grantedScope);
+    }
+
+    /**
+     * Creates the dummy hash at startup, so the first unknown-user login is not slowed
+     * down by an extra BCrypt encode.
+     */
+    @PostConstruct
+    void initDummyHash() {
+        dummyHash();
+    }
+
+    private String dummyHash() {
+        String hash = dummyHash;
+        if (hash == null) {
+            hash = passwordEncoder.encode(UUID.randomUUID().toString());
+            dummyHash = hash;
+        }
+        return hash;
     }
 
     /**

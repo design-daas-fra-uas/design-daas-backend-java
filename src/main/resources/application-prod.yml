@@ -1,3 +1,9 @@
+app:
+  admin-initializer:
+    # Never create the well-known default admin in production unless explicitly asked to;
+    # when enabling it, also set a strong ADMIN_PASSWORD.
+    enabled: ${ADMIN_INIT_ENABLED:false}
+
 springdoc:
   api-docs:
     enabled: false

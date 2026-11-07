@@ -18,7 +18,7 @@ import java.time.Instant;
  * <p>Without this job the tables grow without bound because expired tokens
  * are never removed.</p>
  *
- * <p>The job runs daily at 03:00 (server local time). The schedule is
+ * <p>The job runs daily at 03:00 (in the JVM's default time zone). The schedule is
  * configurable via the {@code app.token.cleanup.cron} property.</p>
  */
 @Service

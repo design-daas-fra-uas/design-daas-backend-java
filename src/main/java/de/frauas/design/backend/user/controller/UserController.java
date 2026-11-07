@@ -160,9 +160,10 @@ public class UserController {
      * triggering a notification email to the administrators.
      *
      * @param application the application identifier being requested
-     * @param isoCode the ISO country/locale code associated with the request
+     * @param isoCode an ISO country/locale code; validated, but currently not used
      * @param jwt the caller's authenticated JWT, used to resolve the requesting user ID
-     * @return 200 OK once the request has been recorded and the notification sent
+     * @return 200 OK once the notification e-mail has been queued (it is sent after the
+     *     transaction commits; nothing is stored in the database)
      */
     @PostMapping("/user/request-application/{application}/{isoCode}")
     @PreAuthorize(Authorities.IS_ANY_USER)
