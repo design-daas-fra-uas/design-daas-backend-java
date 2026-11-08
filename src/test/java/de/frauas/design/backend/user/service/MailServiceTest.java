@@ -120,4 +120,45 @@ class MailServiceTest {
                     .contains("some-app");
         }
     }
+
+    @Nested
+    @DisplayName("failures")
+    class Failures {
+
+        @Test
+        @DisplayName("a template that cannot be rendered is reported as MailSendException")
+        void templateError() {
+            ReflectionTestUtils.setField(mailService, "mailEnabled", true);
+            ReflectionTestUtils.setField(mailService, "fromAddress", "noreply@design.local");
+            when(mailSender.createMimeMessage()).thenReturn(newMimeMessage());
+            TemplateEngine broken = org.mockito.Mockito.mock(TemplateEngine.class);
+            when(broken.process(org.mockito.ArgumentMatchers.anyString(), any()))
+                    .thenThrow(new org.thymeleaf.exceptions.TemplateProcessingException("bad template"));
+            mailService = new MailService(mailSender, broken);
+            ReflectionTestUtils.setField(mailService, "mailEnabled", true);
+            ReflectionTestUtils.setField(mailService, "fromAddress", "noreply@design.local");
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                            () -> mailService.sendRegistrationCode("alice@example.com", "ABCD1234", 24))
+                    .isInstanceOf(org.springframework.mail.MailSendException.class);
+            verify(mailSender, never()).send(any(MimeMessage.class));
+        }
+
+        @Test
+        @DisplayName("an SMTP failure is passed on to the caller")
+        void sendError() {
+            ReflectionTestUtils.setField(mailService, "mailEnabled", true);
+            ReflectionTestUtils.setField(mailService, "fromAddress", "noreply@design.local");
+            MimeMessage message = newMimeMessage();
+            when(mailSender.createMimeMessage()).thenReturn(message);
+            org.mockito.Mockito.doThrow(new org.springframework.mail.MailSendException("smtp down"))
+                    .when(mailSender)
+                    .send(message);
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                            () -> mailService.sendApplicationRequestEmail("alice@example.com", "Alice", "1", "app"))
+                    .isInstanceOf(org.springframework.mail.MailSendException.class)
+                    .hasMessage("smtp down");
+        }
+    }
 }
