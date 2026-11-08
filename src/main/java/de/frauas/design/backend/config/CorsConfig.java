@@ -1,6 +1,7 @@
 package de.frauas.design.backend.config;
 
 import de.frauas.design.backend.config.properties.CorsProperties;
+import de.frauas.design.backend.shared.logging.RequestIdFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,6 +38,8 @@ public class CorsConfig {
         config.setAllowedOrigins(corsProperties.getAllowedOrigins());
         config.setAllowedMethods(ALLOWED_METHODS);
         config.setAllowedHeaders(List.of("*"));
+        // Lets the frontend read the id of a request (shown with error messages)
+        config.setExposedHeaders(List.of(RequestIdFilter.HEADER));
 
         /* Keep this enabled only if the frontend requires browser-managed
          * credentials such as cookies. Bearer tokens sent through the
