@@ -1,6 +1,7 @@
 package de.frauas.design.backend.bootstrap;
 
 import de.frauas.design.backend.config.properties.AdminInitializerProperties;
+import de.frauas.design.backend.shared.util.LogMasking;
 import de.frauas.design.backend.user.model.Admin;
 import de.frauas.design.backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +55,6 @@ public class DataInitializer implements ApplicationRunner {
 
         userRepository.save(admin);
 
-        log.info("Created default administrator account: {}", email);
+        log.info("Created default administrator account: {}", LogMasking.maskEmail(email));
     }
 }

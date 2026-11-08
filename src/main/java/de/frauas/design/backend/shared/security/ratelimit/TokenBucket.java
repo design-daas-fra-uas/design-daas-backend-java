@@ -1,82 +1,73 @@
 package de.frauas.design.backend.shared.security.ratelimit;
 
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
 
 /**
  * Thread-safe token bucket for per-client rate limiting.
  *
- * <p>The bucket starts full and refills at a rate equivalent to {@code capacity}
- * tokens per refill period. A successful request consumes one token.</p>
+ * <p>The bucket starts full with {@code capacity} tokens and refills continuously at
+ * {@code capacity} tokens per refill period. A request consumes one token; without a
+ * whole token left it is rejected. Fractions of a token are kept, so the configured
+ * rate holds exactly, also under steady traffic.</p>
  *
- * <p>Known limitation: every successful request moves the refill timestamp to "now"
- * (truncated to whole seconds) and drops any fractional token, so under steady
- * traffic the bucket refills more slowly than the configured rate.</p>
- *
- * <p>The implementation stores the current token count and last refill time
- * using atomic state and does not require explicit locking.</p>
+ * <p>The state is two fields guarded by the bucket's monitor: simple and fast enough
+ * for the small request rates of the login and registration endpoints.</p>
  */
 final class TokenBucket {
 
-    private final long capacity;
+    private final double capacity;
     private final double refillTokensPerMillisecond;
+    private final LongSupplier clock;
 
-    /**
-     * Packed state: [last refill time in epoch seconds (high 32 bits) | available tokens (low 32 bits)]
-     */
-    private final AtomicLong state;
+    private double tokens;
+    private long lastRefillMillis;
 
     TokenBucket(int requestsPerMinute, long refillPeriodMillis) {
+        this(requestsPerMinute, refillPeriodMillis, System::currentTimeMillis);
+    }
+
+    TokenBucket(int requestsPerMinute, long refillPeriodMillis, LongSupplier clock) {
         if (requestsPerMinute <= 0) {
             throw new IllegalArgumentException("requestsPerMinute must be greater than zero");
         }
-
         if (refillPeriodMillis <= 0) {
             throw new IllegalArgumentException("refillPeriodMillis must be greater than zero");
         }
-
         this.capacity = requestsPerMinute;
         this.refillTokensPerMillisecond = (double) requestsPerMinute / refillPeriodMillis;
-
-        /*
-         * State stores:
-         * high 32 bits = last refill timestamp (seconds)
-         * low 32 bits  = token count
-         *
-         * This implementation is intentionally simple for the relatively
-         * small request limits used by the application.
-         */
-        long timestampSeconds = System.currentTimeMillis() / 1_000L;
-
-        this.state = new AtomicLong((timestampSeconds << 32) | requestsPerMinute);
+        this.clock = clock;
+        this.tokens = capacity;
+        this.lastRefillMillis = clock.getAsLong();
     }
 
-    boolean tryConsume() {
-        while (true) {
-            long current = state.get();
-
-            long lastRefillSeconds = current >>> 32;
-            long storedTokens = current & 0xFFFFFFFFL;
-
-            long nowMillis = System.currentTimeMillis();
-            long lastRefillMillis = lastRefillSeconds * 1_000L;
-
-            long elapsedMillis = Math.max(0, nowMillis - lastRefillMillis);
-
-            long refilledTokens = (long) (elapsedMillis * refillTokensPerMillisecond);
-
-            long availableTokens = Math.min(capacity, storedTokens + refilledTokens);
-
-            if (availableTokens <= 0) {
-                return false;
-            }
-
-            long nowSeconds = nowMillis / 1_000L;
-
-            long nextState = (nowSeconds << 32) | (availableTokens - 1);
-
-            if (state.compareAndSet(current, nextState)) {
-                return true;
-            }
+    /**
+     * Takes one token if available.
+     *
+     * @return {@code true} if the request is allowed
+     */
+    synchronized boolean tryConsume() {
+        refill();
+        if (tokens < 1) {
+            return false;
         }
+        tokens -= 1;
+        return true;
+    }
+
+    /**
+     * A full bucket behaves exactly like a new one, so it can be dropped to free memory.
+     *
+     * @return {@code true} if the bucket has refilled completely
+     */
+    synchronized boolean isFull() {
+        refill();
+        return tokens >= capacity;
+    }
+
+    private void refill() {
+        long now = clock.getAsLong();
+        long elapsed = Math.max(0, now - lastRefillMillis);
+        tokens = Math.min(capacity, tokens + elapsed * refillTokensPerMillisecond);
+        lastRefillMillis = now;
     }
 }

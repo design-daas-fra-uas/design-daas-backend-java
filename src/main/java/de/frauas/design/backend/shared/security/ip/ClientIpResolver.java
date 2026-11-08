@@ -11,7 +11,12 @@ import java.net.InetAddress;
  * Resolves the client IP address for rate-limiting purposes.
  *
  * <p>{@code X-Forwarded-For} is only trusted when the direct connection
- * originates from a configured trusted reverse proxy.</p>
+ * originates from a configured trusted reverse proxy. Each proxy appends the
+ * address it received the request from, so the header is read from right to
+ * left and the first address that is not a trusted proxy is the client. The
+ * left-most entries are written by the client itself and are never trusted
+ * on their own: taking the first entry would let any client pick its own IP
+ * and bypass the rate limit.</p>
  */
 @Component
 @RequiredArgsConstructor
@@ -31,12 +36,19 @@ public class ClientIpResolver {
         String remoteAddress = request.getRemoteAddr();
         String forwardedFor = request.getHeader(FORWARDED_FOR_HEADER);
 
-        if (forwardedFor != null && !forwardedFor.isBlank() && isTrustedProxy(remoteAddress)) {
-
-            return forwardedFor.split(",")[0].trim();
+        if (forwardedFor == null || forwardedFor.isBlank() || !isTrustedProxy(remoteAddress)) {
+            return remoteAddress;
         }
 
-        return remoteAddress;
+        String[] hops = forwardedFor.split(",");
+        for (int i = hops.length - 1; i >= 0; i--) {
+            String hop = hops[i].trim();
+            if (!hop.isEmpty() && !isTrustedProxy(hop)) {
+                return hop;
+            }
+        }
+        // Every hop is a trusted proxy: the request started on one of them
+        return hops[0].trim().isEmpty() ? remoteAddress : hops[0].trim();
     }
 
     private boolean isTrustedProxy(String remoteAddress) {

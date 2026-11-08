@@ -4,6 +4,10 @@ import de.frauas.design.backend.shared.dto.ErrorResponse;
 import de.frauas.design.backend.shared.exception.ConflictException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Validation;
+import jakarta.validation.constraints.NotBlank;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -69,5 +73,32 @@ class GlobalExceptionHandlerTest {
         assertThat(resp.getBody().getMessage()).contains("Support reference:");
         // Must NOT leak the raw exception detail to the caller (SEC-M2)
         assertThat(resp.getBody().getMessage()).doesNotContain("something blew up");
+    }
+
+    @Test
+    @DisplayName("handleDataIntegrity returns 409 without SQL details")
+    void handleDataIntegrity_returns409() {
+        ResponseEntity<ErrorResponse> resp = handler.handleDataIntegrity(
+                new DataIntegrityViolationException("x", new RuntimeException("Duplicate entry 'a' for key 'uk'")));
+
+        assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(resp.getBody()).isNotNull();
+        assertThat(resp.getBody().getMessage()).isEqualTo("The request conflicts with existing data");
+    }
+
+    record Named(@NotBlank String name) {}
+
+    @Test
+    @DisplayName("handleConstraintViolation returns 400 listing each violation")
+    void handleConstraintViolation_returns400() {
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            var violations = factory.getValidator().validate(new Named(" "));
+            ResponseEntity<ErrorResponse> resp =
+                    handler.handleConstraintViolation(new ConstraintViolationException(violations));
+
+            assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(resp.getBody()).isNotNull();
+            assertThat(resp.getBody().getMessage()).startsWith("name: ");
+        }
     }
 }
