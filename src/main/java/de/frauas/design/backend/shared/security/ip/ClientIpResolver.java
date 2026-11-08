@@ -40,6 +40,17 @@ public class ClientIpResolver {
             return remoteAddress;
         }
 
+        String[] hops = forwardedFor.split(",");
+        for (int i = hops.length - 1; i >= 0; i--) {
+            String hop = hops[i].trim();
+            if (!hop.isEmpty() && !isTrustedProxy(hop)) {
+                return hop;
+            }
+        }
+        // Every hop is a trusted proxy: the request started on one of them
+        return hops[0].trim().isEmpty() ? remoteAddress : hops[0].trim();
+    }
+
     private boolean isTrustedProxy(String remoteAddress) {
         return properties.getTrustedProxyRanges().stream().anyMatch(cidr -> matchesCidr(remoteAddress, cidr));
     }
