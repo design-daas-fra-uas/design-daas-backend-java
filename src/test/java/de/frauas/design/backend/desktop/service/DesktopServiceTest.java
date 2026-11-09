@@ -6,6 +6,7 @@ import de.frauas.design.backend.desktop.dto.DesktopGroupCreateRequest;
 import de.frauas.design.backend.desktop.dto.DesktopGroupDto;
 import de.frauas.design.backend.desktop.exception.DesktopGroupAlreadyExistsException;
 import de.frauas.design.backend.desktop.exception.DesktopGroupNotFoundException;
+import de.frauas.design.backend.desktop.exception.DesktopNotFoundException;
 import de.frauas.design.backend.desktop.exception.UserGroupAlreadyAssociatedException;
 import de.frauas.design.backend.desktop.model.Desktop;
 import de.frauas.design.backend.desktop.model.DesktopGroup;
@@ -246,6 +247,70 @@ class DesktopServiceTest {
 
             assertThat(ug.getDesktopGroups()).contains(dg);
             assertThat(dg.getUserGroups()).contains(ug);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Delete
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("delete")
+    class Delete {
+
+        @Test
+        @DisplayName("deleteDesktop removes the desktop from its groups, then deletes it")
+        void deleteDesktop_unlinksAndDeletes() {
+            Desktop desktop = new Desktop();
+            desktop.setId(1);
+            DesktopGroup group = new DesktopGroup();
+            group.setId(2);
+            group.getDesktops().add(desktop);
+            desktop.getDesktopGroups().add(group);
+            when(desktopRepository.findById(1)).thenReturn(Optional.of(desktop));
+
+            desktopService.deleteDesktop(1);
+
+            assertThat(group.getDesktops()).isEmpty();
+            verify(desktopGroupRepository).saveAll(List.of(group));
+            verify(desktopRepository).delete(desktop);
+        }
+
+        @Test
+        @DisplayName("deleteDesktop throws when not found")
+        void deleteDesktop_notFound_throws() {
+            when(desktopRepository.findById(99)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> desktopService.deleteDesktop(99)).isInstanceOf(DesktopNotFoundException.class);
+            verify(desktopRepository, never()).delete(any());
+        }
+
+        @Test
+        @DisplayName("deleteDesktopGroup unlinks it from its user groups, then deletes it")
+        void deleteDesktopGroup_unlinksAndDeletes() {
+            DesktopGroup group = new DesktopGroup();
+            group.setId(2);
+            UserGroup userGroup = new UserGroup();
+            userGroup.setId(3);
+            userGroup.getDesktopGroups().add(group);
+            group.getUserGroups().add(userGroup);
+            when(desktopGroupRepository.findById(2)).thenReturn(Optional.of(group));
+
+            desktopService.deleteDesktopGroup(2);
+
+            assertThat(userGroup.getDesktopGroups()).isEmpty();
+            verify(userGroupRepository).saveAll(List.of(userGroup));
+            verify(desktopGroupRepository).delete(group);
+        }
+
+        @Test
+        @DisplayName("deleteDesktopGroup throws when not found")
+        void deleteDesktopGroup_notFound_throws() {
+            when(desktopGroupRepository.findById(99)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> desktopService.deleteDesktopGroup(99))
+                    .isInstanceOf(DesktopGroupNotFoundException.class);
+            verify(desktopGroupRepository, never()).delete(any());
         }
     }
 }
