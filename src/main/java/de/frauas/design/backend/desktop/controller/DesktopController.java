@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -79,5 +80,24 @@ public class DesktopController {
         log.info("GET /desktop/{} — fetching desktop", id);
 
         return ResponseEntity.ok(desktopService.getDesktopById(id));
+    }
+
+    /**
+     * Permanently deletes a desktop; the desktop groups it belonged to are kept.
+     *
+     * @param id the desktop ID
+     * @return 204 No Content
+     * @throws DesktopNotFoundException if no desktop exists with the given id (404)
+     */
+    @DeleteMapping("/desktop/{id}")
+    public ResponseEntity<Void> deleteDesktop(@PathVariable Integer id) {
+
+        log.info("DELETE /desktop/{} — deleting desktop", id);
+
+        desktopService.deleteDesktop(id);
+
+        log.info("DELETE /desktop/{} — desktop deleted", id);
+
+        return ResponseEntity.noContent().build();
     }
 }

@@ -30,6 +30,14 @@ public interface UserRepository extends JpaRepository<BaseUser, Integer> {
     @Query("SELECT a FROM Admin a ORDER BY a.id")
     List<Admin> findAllAdmins();
 
+    /** Finds an admin by ID, excluding regular users. */
+    @Query("SELECT a FROM Admin a WHERE a.id = :id")
+    Optional<Admin> findAdminById(@Param("id") Integer id);
+
+    /** Counts all admin accounts. */
+    @Query("SELECT COUNT(a) FROM Admin a")
+    long countAdmins();
+
     /** Finds a regular user by ID, excluding admins. */
     @Query("SELECT u FROM User u WHERE u.id = :id")
     Optional<User> findUserById(@Param("id") Integer id);

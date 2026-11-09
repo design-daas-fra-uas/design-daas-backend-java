@@ -18,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -108,6 +109,19 @@ public class UserController {
     }
 
     /**
+     * Looks up a single user (admin-only).
+     *
+     * @param userId the ID of the user
+     * @return 200 OK with the matching {@link UserDto}, or 404 if no such user exists
+     */
+    @GetMapping("/user/{userId}")
+    @PreAuthorize(Authorities.IS_ADMIN)
+    public ResponseEntity<UserDto> getUserById(@PathVariable Integer userId) {
+        log.info("GET /user/{} — fetching user", userId);
+        return ResponseEntity.ok(userService.getUserById(userId));
+    }
+
+    /**
      * Partially updates a user (admin-only). Fields omitted from {@code request} are
      * left unchanged.
      *
@@ -152,6 +166,21 @@ public class UserController {
         log.info("PATCH /user/{}/disable — disabling user", userId);
         userService.disableUser(userId);
         log.info("PATCH /user/{}/disable — user disabled", userId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Permanently deletes a user account (admin-only) and e-mails the user about it.
+     *
+     * @param userId the ID of the user to delete
+     * @return 204 No Content, or 404 if no such user exists
+     */
+    @DeleteMapping("/user/{userId}")
+    @PreAuthorize(Authorities.IS_ADMIN)
+    public ResponseEntity<Void> deleteUser(@PathVariable Integer userId) {
+        log.info("DELETE /user/{} — deleting user", userId);
+        userService.deleteUser(userId);
+        log.info("DELETE /user/{} — user deleted", userId);
         return ResponseEntity.noContent().build();
     }
 

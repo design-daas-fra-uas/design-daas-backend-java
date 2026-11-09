@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -74,5 +75,19 @@ public class UserGroupController {
         UserGroupDto result = userGroupService.updateUserGroup(id, request);
         log.info("PATCH /user_group/{} — updated successfully", id);
         return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Permanently deletes a user group. Its members are kept; they just lose the membership.
+     *
+     * @param id the ID of the group to delete
+     * @return 204 No Content, or 404 if no such group exists
+     */
+    @DeleteMapping("/user_group/{id}")
+    public ResponseEntity<Void> deleteUserGroup(@PathVariable Integer id) {
+        log.info("DELETE /user_group/{} — deleting user group", id);
+        userGroupService.deleteUserGroup(id);
+        log.info("DELETE /user_group/{} — deleted", id);
+        return ResponseEntity.noContent().build();
     }
 }

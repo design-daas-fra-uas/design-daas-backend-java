@@ -160,6 +160,19 @@ public class UserService {
     }
 
     /**
+     * Looks up a single regular user by ID.
+     *
+     * @param id the ID of the user
+     * @return the matching user
+     * @throws UserNotFoundException if no user exists with the given id
+     */
+    @Transactional(readOnly = true)
+    public UserDto getUserById(Integer id) {
+        log.info("getUserById — id={}", id);
+        return UserDto.from(getUserOrThrow(id));
+    }
+
+    /**
      * Partially updates a user. Fields left {@code null} on {@code request} are left
      * unchanged.
      *
@@ -228,6 +241,28 @@ public class UserService {
         eventPublisher.publishEvent(new UserSessionsInvalidatedEvent(id));
         log.info("disableUser — user disabled id={}", id);
         return UserDto.from(user);
+    }
+
+    /**
+     * Permanently deletes a user and e-mails them that their account is gone.
+     *
+     * <p>Group memberships are removed by Hibernate (the user owns that join table). The
+     * user's tokens and permission rules are removed by the {@code ON DELETE CASCADE}
+     * foreign keys in the schema; any token still in flight is rejected by
+     * {@code TokenRevocationValidator} because its user no longer exists.</p>
+     *
+     * @param id the ID of the user to delete
+     * @throws UserNotFoundException if no user exists with the given id
+     */
+    @Transactional
+    public void deleteUser(Integer id) {
+        log.debug("deleteUser — id={}", id);
+        User user = getUserOrThrow(id);
+        String email = user.getEmail();
+        String name = user.getName();
+        userRepository.delete(user);
+        AfterCommit.run(() -> mailService.sendAccountDeletedEmail(email, name));
+        log.info("deleteUser — user deleted id={} email={}", id, LogMasking.maskEmail(email));
     }
 
     /**

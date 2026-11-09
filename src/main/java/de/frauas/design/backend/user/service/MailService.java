@@ -36,6 +36,7 @@ public class MailService {
 
     private static final String REGISTRATION_CODE_TEMPLATE = "mail/registration-code";
     private static final String APPLICATION_REQUEST_TEMPLATE = "mail/application-request";
+    private static final String ACCOUNT_DELETED_TEMPLATE = "mail/account-deleted";
 
     private final JavaMailSender mailSender;
 
@@ -107,6 +108,26 @@ public class MailService {
                 "Application request email sent for user {} requesting {}",
                 LogMasking.maskEmail(userEmail),
                 application);
+    }
+
+    /**
+     * Tells a user or admin that an administrator deleted their account, using the
+     * {@code mail/account-deleted} template.
+     *
+     * @param toEmail  the deleted account's email address
+     * @param userName the deleted account's display name
+     */
+    @Async
+    public void sendAccountDeletedEmail(String toEmail, String userName) {
+        if (!mailEnabled) {
+            log.info("Mail disabled — skipping account-deleted email to {}", LogMasking.maskEmail(toEmail));
+            return;
+        }
+        Context context = new Context();
+        context.setVariable("userName", userName);
+        context.setVariable("userEmail", toEmail);
+        send(toEmail, "DESIGN DaaS — Account Deleted", ACCOUNT_DELETED_TEMPLATE, context);
+        log.info("Account-deleted email sent to {}", LogMasking.maskEmail(toEmail));
     }
 
     /**

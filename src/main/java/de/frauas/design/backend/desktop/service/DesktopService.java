@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -104,6 +105,25 @@ public class DesktopService {
                 request.getGroups() != null ? request.getGroups().size() : 0);
     }
 
+    /**
+     * Permanently deletes a desktop. It is removed from every desktop group first, because
+     * {@link DesktopGroup} owns that join table; the groups themselves are kept.
+     *
+     * @param id the ID of the desktop to delete
+     * @throws DesktopNotFoundException if no desktop exists with the given id
+     */
+    @Transactional
+    public void deleteDesktop(Integer id) {
+        log.debug("deleteDesktop — id={}", id);
+        Desktop desktop = findDesktopById(id);
+        List<DesktopGroup> groups = new ArrayList<>(desktop.getDesktopGroups());
+        groups.forEach(g -> g.getDesktops().remove(desktop));
+        desktopGroupRepository.saveAll(groups);
+        desktop.getDesktopGroups().clear();
+        desktopRepository.delete(desktop);
+        log.info("deleteDesktop — desktop deleted id={} formerGroups={}", id, groups.size());
+    }
+
     // ---- DesktopGroups ----
 
     /**
@@ -136,6 +156,26 @@ public class DesktopService {
         g.setDescription(request.getDescription());
         DesktopGroup savedGroup = desktopGroupRepository.save(g);
         log.info("createDesktopGroup — created id={}", savedGroup.getId());
+    }
+
+    /**
+     * Permanently deletes a desktop group. It is unlinked from every user group first, because
+     * {@link UserGroup} owns that join table. Its desktop links (owned by the group) are removed
+     * by Hibernate; the desktops and user groups themselves are kept.
+     *
+     * @param id the ID of the desktop group to delete
+     * @throws DesktopGroupNotFoundException if no desktop group exists with the given id
+     */
+    @Transactional
+    public void deleteDesktopGroup(Integer id) {
+        log.debug("deleteDesktopGroup — id={}", id);
+        DesktopGroup group = findDesktopGroupById(id);
+        List<UserGroup> userGroups = new ArrayList<>(group.getUserGroups());
+        userGroups.forEach(ug -> ug.getDesktopGroups().remove(group));
+        userGroupRepository.saveAll(userGroups);
+        group.getUserGroups().clear();
+        desktopGroupRepository.delete(group);
+        log.info("deleteDesktopGroup — desktop group deleted id={} formerUserGroups={}", id, userGroups.size());
     }
 
     /**

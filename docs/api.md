@@ -28,9 +28,11 @@ Token error codes: `invalid_request` (400), `invalid_scope` (400), `unsupported_
 | POST | `/user/validate_email` | 🌐 | `{email, registration_code}` | `200` / `400` |
 | POST | `/user/resend_code` | 🌐 | `{email}` | `202` (always) |
 | GET | `/users` | 🛡️ | – | `200` `[UserDto]` |
+| GET | `/user/{userId}` | 🛡️ | – | `200` `UserDto` / `404` |
 | PATCH | `/user/{userId}` | 🛡️ | `{name?, email?, password?, groups?}` | `200` `UserDto` |
 | PATCH | `/user/{userId}/enable` | 🛡️ | – | `204` |
 | PATCH | `/user/{userId}/disable` | 🛡️ | – | `204` (revokes all of the user's tokens) |
+| DELETE | `/user/{userId}` | 🛡️ | – | `204` / `404` (e-mails the user that the account was deleted; tokens and permission rules are removed with it) |
 | POST | `/user/request-application/{application}/{isoCode}` | 👤 | – | `200` (e-mails `MAIL_FROM`) |
 
 `UserDto`: `{id, name, email, role, groups: [userGroupId], enabled}`
@@ -40,7 +42,9 @@ Token error codes: `invalid_request` (400), `invalid_scope` (400), `unsupported_
 | Method | Path | Access | Request body | Success |
 |---|---|---|---|---|
 | GET | `/admins` | 🛡️ | – | `200` `[{id, name, email, role}]` |
+| GET | `/admin/{adminId}` | 🛡️ | – | `200` `{id, name, email, role}` / `404` |
 | POST | `/admin` | 🛡️ | `{name, email, password}` | `201` (enabled immediately) |
+| DELETE | `/admin/{adminId}` | 🛡️ | – | `204` / `404` / `409` if it is the caller's own account or the last admin (e-mails the deleted admin) |
 
 ## User groups
 
@@ -49,6 +53,7 @@ Token error codes: `invalid_request` (400), `invalid_scope` (400), `unsupported_
 | GET | `/user_groups` | 🛡️ | – | `200` `[{id, name, description}]` |
 | POST | `/user_group` | 🛡️ | `{name?, description?}` (name falls back to description; at least one is required) | `201` |
 | PATCH | `/user_group/{id}` | 🛡️ | `{name?, description?, userIds?: [int]}` (`userIds` replaces the whole member list) | `200` |
+| DELETE | `/user_group/{id}` | 🛡️ | – | `204` / `404` (members are kept; the group's desktop-group links and permission rules are removed) |
 
 ## Desktops (`desktop` module)
 
@@ -56,10 +61,12 @@ Token error codes: `invalid_request` (400), `invalid_scope` (400), `unsupported_
 |---|---|---|---|---|
 | GET | `/desktops` | 🛡️ | – | `200` `[{id, description, groups: [desktopGroupId]}]` |
 | GET | `/desktop/{id}` | 🛡️ | – | `200` / `404` |
+| DELETE | `/desktop/{id}` | 🛡️ | – | `204` / `404` (the desktop groups it belonged to are kept) |
 | POST | `/desktop` | 🛡️ | `{description, groups?: [{description}]}` (also creates the listed desktop groups) | `201` / `409` if a group description already exists |
 | GET | `/desktop_groups` | 🛡️ | – | `200` `[{id, description, desktopIds}]` |
 | POST | `/desktop_group` | 🛡️ | `{description}` (must be unique) | `201` / `409` |
 | POST | `/desktop_group/{id}/user_group/{userGroupId}` | 🛡️ | – | `201` / `404` / `409` if already linked |
+| DELETE | `/desktop_group/{id}` | 🛡️ | – | `204` / `404` (its desktops and linked user groups are kept) |
 
 ## Permissions (`permission` module)
 
