@@ -1,6 +1,7 @@
 package de.frauas.design.backend.user.service;
 
 import de.frauas.design.backend.shared.event.UserSessionsInvalidatedEvent;
+import de.frauas.design.backend.shared.util.AfterCommit;
 import de.frauas.design.backend.shared.util.LogMasking;
 import de.frauas.design.backend.user.dto.CreateUserRequest;
 import de.frauas.design.backend.user.dto.PatchUserRequest;
@@ -18,8 +19,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -84,7 +83,7 @@ public class UserService {
         log.info("createUser — user created id={} email={}", user.getId(), LogMasking.maskEmail(user.getEmail()));
         String email = user.getEmail();
         String registrationCode = user.getRegistrationCode();
-        runAfterCommit(
+        AfterCommit.run(
                 () -> mailService.sendRegistrationCode(email, registrationCode, REGISTRATION_CODE_TIMEOUT_HOURS));
         return UserDto.from(user);
     }
@@ -144,7 +143,7 @@ public class UserService {
         userRepository.save(user);
         String address = user.getEmail();
         String code = user.getRegistrationCode();
-        runAfterCommit(() -> mailService.sendRegistrationCode(address, code, REGISTRATION_CODE_TIMEOUT_HOURS));
+        AfterCommit.run(() -> mailService.sendRegistrationCode(address, code, REGISTRATION_CODE_TIMEOUT_HOURS));
         log.info("resendRegistrationCode — new code issued userId={}", user.getId());
     }
 
@@ -280,7 +279,7 @@ public class UserService {
         String email = baseUser.getEmail();
         String name = baseUser.getName();
         String id = String.valueOf(baseUser.getId());
-        runAfterCommit(() -> mailService.sendApplicationRequestEmail(email, name, id, application));
+        AfterCommit.run(() -> mailService.sendApplicationRequestEmail(email, name, id, application));
         log.info("requestApplication — email sent for userId={} application={}", userId, application);
     }
 
@@ -309,26 +308,6 @@ public class UserService {
             throw new IllegalArgumentException("Unknown user group ids: " + missingIds);
         }
         return groups;
-    }
-
-    /**
-     * Runs {@code action} once the current transaction commits, so slow I/O (e.g. SMTP
-     * sends) never keeps database locks held longer than necessary. Falls back to running
-     * immediately if no transaction is active (e.g. during tests).
-     *
-     * @param action the work to defer until after commit
-     */
-    private void runAfterCommit(Runnable action) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    action.run();
-                }
-            });
-        } else {
-            action.run();
-        }
     }
 
     private void issueRegistrationCode(User user) {
