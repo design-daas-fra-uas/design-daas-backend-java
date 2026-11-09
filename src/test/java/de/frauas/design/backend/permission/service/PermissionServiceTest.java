@@ -11,6 +11,7 @@ import de.frauas.design.backend.permission.repository.EndpointGroupUserAccessRep
 import de.frauas.design.backend.permission.repository.EndpointGroupUserGroupAccessRepository;
 import de.frauas.design.backend.permission.repository.EndpointUserAccessRepository;
 import de.frauas.design.backend.permission.repository.EndpointUserGroupAccessRepository;
+import de.frauas.design.backend.user.model.Admin;
 import de.frauas.design.backend.user.model.User;
 import de.frauas.design.backend.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -93,6 +94,21 @@ class PermissionServiceTest {
                 .findAllByUserIdAndEndpointGroup_Endpoints_FunctionNameOrderByIdAsc(any(), any());
         verify(endpointGroupUserGroupAccessRepo, never())
                 .findAllByUserGroupIdInAndEndpointGroup_Endpoints_FunctionNameOrderByIdAsc(any(), any());
+    }
+
+    @Test
+    @DisplayName("admins are always allowed, without looking at any rule")
+    void admin_isAllowedWithoutRules() {
+        Admin admin = new Admin();
+        admin.setId(50);
+        admin.setName("Root");
+        when(userRepository.findById(50)).thenReturn(Optional.of(admin));
+
+        PermissionResultDto result = permissionService.checkPermission(50, FUNCTION);
+
+        assertThat(result.getResult()).isEqualTo("allow");
+        verify(endpointUserAccessRepo, never()).findAllByUserIdAndEndpoint_FunctionNameOrderByIdAsc(any(), any());
+        verify(userRepository, never()).findGroupIdsByUserId(any());
     }
 
     // -------------------------------------------------------------------------

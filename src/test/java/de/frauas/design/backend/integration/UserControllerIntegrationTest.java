@@ -245,4 +245,17 @@ class UserControllerIntegrationTest extends BaseIntegrationTest {
         mockMvc.perform(patch("/user/" + id + "/enable").with(adminJwt(999))).andExpect(status().isNoContent());
         assertTrue(userRepository.findById(id).orElseThrow().isEnabled());
     }
+
+    @Test
+    @Order(15)
+    @DisplayName("GET /user/{id} – returns the user, 404 for an unknown id, 403 with user JWT")
+    void getUserById_accessAndNotFound() throws Exception {
+        User u = (User) userRepository.findByEmail(TEST_EMAIL).orElseThrow();
+
+        mockMvc.perform(get("/user/" + u.getId()).with(adminJwt(999)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(TEST_EMAIL));
+        mockMvc.perform(get("/user/987654").with(adminJwt(999))).andExpect(status().isNotFound());
+        mockMvc.perform(get("/user/" + u.getId()).with(userJwt(u.getId()))).andExpect(status().isForbidden());
+    }
 }

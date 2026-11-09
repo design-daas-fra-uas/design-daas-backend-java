@@ -16,6 +16,7 @@
 | V2 | `registration_code_timeout` and `registration_used_moment` changed to `TIMESTAMP(6)` (UTC) |
 | V3 | Dropped `desktops.name`; desktops are identified by `description` |
 | V4 | Dropped `desktop_groups.name`; `description` is now `NOT NULL UNIQUE`. Fails if duplicate or empty descriptions exist, so clean those up first |
+| V5 | At most one permission rule per kind, subject and target (`uq_<table>` unique constraints on the four rule tables). Existing duplicates are deleted first, keeping the row the check already used: a deny before an allow, otherwise the oldest |
 
 ## Entity-relationship diagram
 

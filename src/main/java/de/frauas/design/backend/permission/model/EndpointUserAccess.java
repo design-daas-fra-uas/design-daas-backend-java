@@ -9,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -17,7 +18,11 @@ import lombok.Setter;
  * Direct permission rule for one user and one endpoint (resolution step 1, most specific).
  */
 @Entity
-@Table(name = "endpoint_user_access")
+@Table(
+        name = "endpoint_user_access",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_endpoint_user_access",
+                columnNames = {"user_id", "endpoint_id"}))
 @Getter
 @Setter
 @NoArgsConstructor

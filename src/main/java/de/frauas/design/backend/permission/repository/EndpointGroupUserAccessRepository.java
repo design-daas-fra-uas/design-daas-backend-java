@@ -20,4 +20,10 @@ public interface EndpointGroupUserAccessRepository extends JpaRepository<Endpoin
      */
     List<EndpointGroupUserAccess> findAllByUserIdAndEndpointGroup_Endpoints_FunctionNameOrderByIdAsc(
             Integer userId, String functionName);
+
+    /** Returns whether a rule for this user and endpoint group already exists. */
+    boolean existsByUserIdAndEndpointGroup_Id(Integer userId, Integer endpointGroupId);
+
+    /** Deletes every rule targeting the given endpoint group. */
+    void deleteAllByEndpointGroup_Id(Integer endpointGroupId);
 }

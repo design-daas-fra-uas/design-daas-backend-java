@@ -75,6 +75,29 @@ Token error codes: `invalid_request` (400), `invalid_scope` (400), `unsupported_
 | GET | `/permissions/{functionName}/{userId}` | 🛡️ | – | `{"result":"allow"\|"deny","user":{"id":1,"name":"..."}}` |
 | POST | `/permissions_info` | 🔑 | `{"function_name":"...", "token?":"<raw JWT>"}` | same shape; if `token` is given, that token's user is checked, otherwise the caller |
 
+### Managing permissions
+
+An **endpoint** is one design-daas function (its blueprint name). An **endpoint group** bundles
+endpoints. A **rule** allows or denies one subject (a user or a user group) one target (an
+endpoint or an endpoint group). `kind` names the combination and matches the check order:
+`USER_ENDPOINT` (step 1), `USER_GROUP_ENDPOINT` (2), `USER_ENDPOINT_GROUP` (3),
+`USER_GROUP_ENDPOINT_GROUP` (4). Without a matching rule the answer is `deny`. **Admins are always
+allowed** and need no rules. There is at most one rule per kind, subject and target (enforced by the
+database since V5).
+
+| Method | Path | Access | Request body | Success |
+|---|---|---|---|---|
+| GET | `/endpoints` | 🛡️ | – | `200` `[{id, functionName, description}]` |
+| POST | `/endpoint` | 🛡️ | `{functionName, description?}` (`functionName`: letters, digits, `_ . -`) | `201` / `409` if it exists |
+| DELETE | `/endpoint/{id}` | 🛡️ | – | `204` / `404` (also deletes its rules and removes it from endpoint groups) |
+| GET | `/endpoint_groups` | 🛡️ | – | `200` `[{id, name, description, endpointIds}]` |
+| POST | `/endpoint_group` | 🛡️ | `{name, description?, endpointIds?: [int]}` | `201` / `409` if the name exists |
+| PATCH | `/endpoint_group/{id}` | 🛡️ | `{name?, description?, endpointIds?}` (`endpointIds` replaces the whole list) | `200` `{id, name, description, endpointIds}` |
+| DELETE | `/endpoint_group/{id}` | 🛡️ | – | `204` / `404` (also deletes its rules; the endpoints are kept) |
+| GET | `/permission_rules` | 🛡️ | – | `200` `[{id, kind, subjectId, targetId, targetName, allow}]` |
+| POST | `/permission_rule` | 🛡️ | `{kind, subjectId, targetId, allow}` | `201` / `404` unknown subject or target / `409` duplicate |
+| DELETE | `/permission_rule/{kind}/{id}` | 🛡️ | – | `204` / `404` (rule ids are unique per kind only) |
+
 ## Infrastructure
 
 | Method | Path | Access | Notes |

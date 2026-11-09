@@ -19,4 +19,10 @@ public interface EndpointUserAccessRepository extends JpaRepository<EndpointUser
      * be prepared to resolve multiple equally-specific rows deterministically.</p>
      */
     List<EndpointUserAccess> findAllByUserIdAndEndpoint_FunctionNameOrderByIdAsc(Integer userId, String functionName);
+
+    /** Returns whether a rule for this user and endpoint already exists. */
+    boolean existsByUserIdAndEndpoint_Id(Integer userId, Integer endpointId);
+
+    /** Deletes every rule targeting the given endpoint. */
+    void deleteAllByEndpoint_Id(Integer endpointId);
 }

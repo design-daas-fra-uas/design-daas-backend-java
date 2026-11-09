@@ -5,6 +5,7 @@ import de.frauas.design.backend.permission.model.Endpoint;
 import de.frauas.design.backend.permission.model.EndpointUserAccess;
 import de.frauas.design.backend.permission.repository.EndpointRepository;
 import de.frauas.design.backend.permission.repository.EndpointUserAccessRepository;
+import de.frauas.design.backend.user.model.Admin;
 import de.frauas.design.backend.user.model.User;
 import de.frauas.design.backend.user.repository.UserRepository;
 import org.junit.jupiter.api.AfterAll;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -22,6 +24,7 @@ import java.util.Map;
 
 import static de.frauas.design.backend.integration.MockJwt.adminJwt;
 import static de.frauas.design.backend.integration.MockJwt.userJwt;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -138,28 +141,27 @@ class PermissionControllerIntegrationTest extends BaseIntegrationTest {
 
     @Test
     @Order(4)
-    @DisplayName("GET /permissions – returns deny when duplicate direct rules conflict")
-    void checkPermission_conflictingDuplicateDirectRules_returnsDeny() throws Exception {
-        EndpointUserAccess allowRule = new EndpointUserAccess();
-        allowRule.setUserId(testUser.getId());
-        allowRule.setEndpoint(testEndpoint);
-        allowRule.setAllowAccess(true);
-        endpointUserAccessRepository.save(allowRule);
-
+    @DisplayName("GET /permissions – a duplicate direct rule is refused, the existing rule still decides")
+    void checkPermission_duplicateDirectRule_isRefusedByDatabase() throws Exception {
         EndpointUserAccess denyRule = new EndpointUserAccess();
         denyRule.setUserId(testUser.getId());
         denyRule.setEndpoint(testEndpoint);
         denyRule.setAllowAccess(false);
         endpointUserAccessRepository.save(denyRule);
 
+        EndpointUserAccess allowRule = new EndpointUserAccess();
+        allowRule.setUserId(testUser.getId());
+        allowRule.setEndpoint(testEndpoint);
+        allowRule.setAllowAccess(true);
+
         try {
+            assertThrows(DataIntegrityViolationException.class, () -> endpointUserAccessRepository.save(allowRule));
             mockMvc.perform(get("/permissions/test_function/" + testUser.getId())
                             .with(adminJwt(999)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.result").value("deny"));
         } finally {
             endpointUserAccessRepository.delete(denyRule);
-            endpointUserAccessRepository.delete(allowRule);
         }
     }
 
@@ -267,5 +269,26 @@ class PermissionControllerIntegrationTest extends BaseIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @Order(12)
+    @DisplayName("GET /permissions – admins are allowed without any rule")
+    void checkPermission_admin_returnsAllow() throws Exception {
+        userRepository.findByEmail("perm.admin@example.com").ifPresent(userRepository::delete);
+        Admin admin = new Admin();
+        admin.setName("Perm Admin");
+        admin.setEmail("perm.admin@example.com");
+        admin.setPassword(passwordEncoder.encode("Pass1234!"));
+        admin.setEnabled(true);
+        admin = userRepository.save(admin);
+
+        try {
+            mockMvc.perform(get("/permissions/test_function/" + admin.getId()).with(adminJwt(999)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.result").value("allow"));
+        } finally {
+            userRepository.delete(admin);
+        }
     }
 }

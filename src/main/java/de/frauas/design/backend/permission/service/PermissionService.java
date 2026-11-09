@@ -9,6 +9,7 @@ import de.frauas.design.backend.permission.repository.EndpointGroupUserAccessRep
 import de.frauas.design.backend.permission.repository.EndpointGroupUserGroupAccessRepository;
 import de.frauas.design.backend.permission.repository.EndpointUserAccessRepository;
 import de.frauas.design.backend.permission.repository.EndpointUserGroupAccessRepository;
+import de.frauas.design.backend.user.model.Admin;
 import de.frauas.design.backend.user.model.BaseUser;
 import de.frauas.design.backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,9 @@ import java.util.function.Supplier;
  * rule categories while remaining fail-closed for ambiguous data.</p>
  *
  * <p>Default: <b>DENY</b> — if no rule matches at any step, access is denied.
+ *
+ * <p>Admins skip the cascade and are always allowed: they manage the platform, and without this
+ * an empty rule table would lock them out the moment design-daas switches the check on.</p>
  */
 @Slf4j
 @Service
@@ -86,6 +90,10 @@ public class PermissionService {
         }
 
         String userName = user.map(BaseUser::getName).orElse(UNKNOWN_USER_NAME);
+        if (user.get() instanceof Admin) {
+            log.info("checkPermission — userId={} is an admin, allowing fn={}", userId, functionName);
+            return PermissionResultDto.allow(userId, userName);
+        }
         Supplier<List<Integer>> groupIdsSupplier = new Supplier<>() {
             private List<Integer> cachedGroupIds;
 

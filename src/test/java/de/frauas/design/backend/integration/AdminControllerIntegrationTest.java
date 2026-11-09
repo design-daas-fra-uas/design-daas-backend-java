@@ -95,4 +95,25 @@ class AdminControllerIntegrationTest extends BaseIntegrationTest {
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$[?(@.email=='" + TEST_EMAIL + "')]").exists());
     }
+
+    @Test
+    @Order(5)
+    @DisplayName("GET /admin/{id} – returns the created admin, 404 for an unknown id")
+    void getAdminById_returns200Or404() throws Exception {
+        Integer id = userRepository.findByEmail(TEST_EMAIL).orElseThrow().getId();
+
+        mockMvc.perform(get("/admin/" + id).with(adminJwt(999)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(TEST_EMAIL));
+        mockMvc.perform(get("/admin/987654").with(adminJwt(999))).andExpect(status().isNotFound());
+    }
+
+    @Test
+    @Order(6)
+    @DisplayName("GET /admin/{id} – user JWT returns 403")
+    void getAdminById_userJwt_returns403() throws Exception {
+        Integer id = userRepository.findByEmail(TEST_EMAIL).orElseThrow().getId();
+
+        mockMvc.perform(get("/admin/" + id).with(userJwt(1))).andExpect(status().isForbidden());
+    }
 }
