@@ -87,7 +87,7 @@ s.cylinder(287, 608, 282, 100, 'teal', 'MariaDB', 'Schema über Flyway migriert'
 s.box(755, 617, 405, 84, 'green', 'SMTP-Relay', 'Registrierungs- und Benachrichtigungs-E-Mails')
 s.save('abb-3-3')
 
-# ---------------------------------------------------------------- Abb. 4.1 password grant checks
+# ---------------------------------------------------------------- Abb. 4.2 password grant checks
 s = Svg(1400, 1130)
 cx, bw, bh = 400, 480, 66
 L = cx - bw / 2
@@ -99,14 +99,14 @@ steps = [
     ('orange', 'Passwort korrekt?', 'BCrypt-Vergleich mit gespeichertem Hash'),
     ('orange', 'Konto aktiviert?', None),
     ('green', 'Fehlversuchszähler zurücksetzen', 'AccountLockoutService.resetOnSuccess'),
-    ('purple', 'Scope gegen Rolle prüfen', 'ScopeResolver: Nutzer erhalten nie den Scope admin'),
+    ('orange', 'Angeforderter Scope erlaubt?', 'ScopeResolver: Scope muss zur Rolle passen'),
     ('green', 'Tokens ausstellen', 'RS256-JWT (mit jti) und opaker Refresh-Token'),
     ('green', '200 OK', 'access_token, refresh_token, token_type, expires_in, scope'),
 ]
 ys = [30 + 110 * i for i in range(len(steps))]
 for (k, t, sub), y in zip(steps, ys):
     s.box(L, y, bw, bh, k, t, sub)
-ok_label = {1: 'ja', 2: 'ja', 3: 'nein', 4: 'ja', 5: 'ja'}
+ok_label = {1: 'ja', 2: 'ja', 3: 'nein', 4: 'ja', 5: 'ja', 7: 'ja'}
 for i in range(len(steps) - 1):
     s.arrow([(cx, ys[i] + bh), (cx, ys[i + 1] - 2)],
             label=ok_label.get(i), lx=cx + 10, ly=ys[i] + bh + 27, lcolor='#16a34a' if i in ok_label else None)
@@ -116,6 +116,7 @@ fails = {
     3: ('429 account_locked', 'Sperre ist noch aktiv'),
     4: ('401 invalid_grant', ['Fehlversuch wird gezählt;', 'ab 5 Fehlversuchen 15 Minuten Sperre']),
     5: ('401 invalid_grant', 'Konto ist deaktiviert'),
+    7: ('400 invalid_scope', 'z. B. ein Nutzer fordert scope=admin an'),
 }
 for i, (t, sub) in fails.items():
     y = ys[i]
@@ -123,7 +124,7 @@ for i, (t, sub) in fails.items():
     s.box(790, y + bh / 2 - h / 2, 560, h, 'red', t, sub)
     s.arrow([(L + bw, y + bh / 2), (788, y + bh / 2)], color='#dc2626',
             label='ja' if i == 3 else 'nein', lx=L + bw + 14, ly=y + bh / 2 - 9, lcolor='#dc2626')
-s.save('abb-4-1')
+s.save('abb-4-2')
 
 # ---------------------------------------------------------------- Abb. 4.2 token lifecycle
 s = Svg(1400, 1000)
@@ -167,8 +168,8 @@ msg('Backend', 'Client', 655, 'neues Token-Paar', dashed=True)
 msg('Client', 'Backend', 745, 'POST /oauth2/user/logout')
 msg('Backend', 'Datenbank', 790, 'revoked = true (auch bei Passwortänderung oder Deaktivierung)')
 note('Backend', 852, 'TokenCleanupService, täglich 03:00 Uhr')
-msg('Backend', 'Datenbank', 935, 'abgelaufene und widerrufene Zeilen löschen')
-s.save('abb-4-2')
+msg('Backend', 'Datenbank', 935, 'abgelaufene Zeilen löschen')
+s.save('abb-4-3')
 
 # ---------------------------------------------------------------- Abb. 4.3 deployment view
 s = Svg(1400, 800)
@@ -193,5 +194,5 @@ s.arrow([(330, 544), (330, 652)], label='JDBC', lx=342, ly=622)
 s.arrow([(560, 544), (560, 600), (900, 600), (900, 662)], label='SMTP', lx=912, ly=640)
 s.cylinder(170, 655, 340, 110, 'teal', 'MariaDB', 'Schema über Flyway')
 s.box(740, 665, 400, 90, 'green', 'SMTP-Relay', 'nur bei MAIL_ENABLED=true')
-s.save('abb-4-3')
+s.save('abb-4-4')
 print('ok')

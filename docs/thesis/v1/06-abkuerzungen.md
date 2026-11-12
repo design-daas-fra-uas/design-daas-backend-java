@@ -7,7 +7,7 @@
 | AF | Anwendungsfall |
 | ANSI | American National Standards Institute |
 | API | Application Programming Interface |
-| AP | Arbeitspakete |
+| AP | Arbeitspaket |
 | ArchUnit | Architecture Unit |
 | CI | Continuous Integration |
 | CLI | Command Line Interface |
@@ -17,6 +17,7 @@
 | DaaS | Desktop-as-a-Service |
 | DI | Dependency Injection |
 | DTO | Data Transfer Object |
+| E2E | End-to-End |
 | FA | Funktionale Anforderung |
 | HMAC | Keyed-Hash Message Authentication Code |
 | HS256 | HMAC with SHA-256 |
@@ -25,10 +26,8 @@
 | HTTPS | HyperText Transfer Protocol Secure |
 | IETF | Internet Engineering Task Force |
 | INCITS | InterNational Committee for Information Technology Standards |
-| IEC | International Electrotechnical Commission |
 | IoC | Inversion of Control |
 | I/O | Input/Output |
-| ISO | International Organization for Standardization |
 | JaCoCo | Java Code Coverage |
 | JAR | Java ARchive |
 | JDBC | Java Database Connectivity-API |
@@ -52,6 +51,7 @@
 | PDP | Policy Decision Point |
 | PHP | Hypertext Preprocessor |
 | PII | Personally Identifiable Information |
+| PR | Pull Request |
 | PKCE | Proof Key for Code Exchange |
 | RBAC | Role-Based Access Control |
 | RDP | Remote Desktop Protocol |
@@ -67,6 +67,7 @@
 | SSH | Secure Shell |
 | STI | Single Table Inheritance |
 | TLS | Transport Layer Security |
+| TOML | Tom's Obvious, Minimal Language |
 | UI | User Interface |
 | URL | Uniform Resource Locator |
 | UUID | Universally Unique Identifier |
@@ -75,4 +76,4 @@
 | VNC | Virtual Network Computing |
 | XACML | eXtensible Access Control Markup Language |
 | XML | Extensible Markup Language |
-| YAML | Yet Another Markup Language |
+| YAML | YAML Ain't Markup Language |
