@@ -1,0 +1,7 @@
+flowchart LR
+    browser[Browser] -->|"HTTPS :8443 /auth/"| nginx[nginx]
+    nginx -->|"HTTP 127.0.0.1:8080"| backend[daas-auth container]
+    daas[DaaS backend] -->|"HTTP 127.0.0.1:8080"| backend
+    backend -->|docker network| db[(daas-auth-db<br/>MariaDB 11.4)]
+    backend --- keys[(volume keys)]
+    db --- data[(volume db-data)]

@@ -52,106 +52,9 @@
 
 ## Entity-relationship diagram
 
-```mermaid
-erDiagram
-    users {
-        INT id PK
-        VARCHAR role "admin | user"
-        VARCHAR name
-        VARCHAR email UK
-        VARCHAR password "BCrypt hash"
-        BOOLEAN enabled
-        VARCHAR registration_code
-        TIMESTAMP registration_code_timeout
-        TIMESTAMP registration_used_moment
-        INT failed_login_attempts
-        TIMESTAMP locked_until
-    }
-    user_groups {
-        INT id PK
-        VARCHAR name UK
-        VARCHAR description
-    }
-    desktops {
-        INT id PK
-        VARCHAR description
-    }
-    desktop_groups {
-        INT id PK
-        VARCHAR description UK
-    }
-    endpoints {
-        INT id PK
-        VARCHAR function_name UK
-        VARCHAR description
-    }
-    endpoint_groups {
-        INT id PK
-        VARCHAR name UK
-        VARCHAR description
-    }
-    endpoint_user_access {
-        INT id PK
-        INT user_id FK
-        INT endpoint_id FK
-        BOOLEAN allow_access
-    }
-    endpoint_user_group_access {
-        INT id PK
-        INT user_group_id FK
-        INT endpoint_id FK
-        BOOLEAN allow_access
-    }
-    endpoint_group_user_access {
-        INT id PK
-        INT user_id FK
-        INT endpoint_group_id FK
-        BOOLEAN allow_access
-    }
-    endpoint_group_user_group_access {
-        INT id PK
-        INT user_group_id FK
-        INT endpoint_group_id FK
-        BOOLEAN allow_access
-    }
-    access_tokens {
-        BIGINT id PK
-        VARCHAR jti UK
-        INT user_id FK
-        VARCHAR scope
-        TIMESTAMP issued_at
-        TIMESTAMP expires_at
-        BOOLEAN revoked
-        TIMESTAMP revoked_at
-    }
-    refresh_tokens {
-        BIGINT id PK
-        VARCHAR token_value UK
-        INT user_id FK
-        VARCHAR scope
-        TIMESTAMP created_at
-        TIMESTAMP expires_at
-        BOOLEAN revoked
-        TIMESTAMP revoked_at
-    }
+![Entity-relationship diagram of the database](images/database-entity-relationship-diagram.png)
 
-    users }o--o{ user_groups : "users_to_user_groups"
-    desktops }o--o{ desktop_groups : "desktops_to_desktop_groups"
-    user_groups }o--o{ desktop_groups : "user_group_to_desktop_group"
-    endpoints }o--o{ endpoint_groups : "endpoint_group_members"
-
-    users ||--o{ endpoint_user_access : "1"
-    endpoints ||--o{ endpoint_user_access : ""
-    user_groups ||--o{ endpoint_user_group_access : "2"
-    endpoints ||--o{ endpoint_user_group_access : ""
-    users ||--o{ endpoint_group_user_access : "3"
-    endpoint_groups ||--o{ endpoint_group_user_access : ""
-    user_groups ||--o{ endpoint_group_user_group_access : "4"
-    endpoint_groups ||--o{ endpoint_group_user_group_access : ""
-
-    users ||--o{ access_tokens : ""
-    users ||--o{ refresh_tokens : ""
-```
+*Source: [`images/src/database-entity-relationship-diagram.mmd`](images/src/database-entity-relationship-diagram.mmd)*
 
 The many-to-many relationships are labelled with their join tables. The numbers on the rule
 tables are the order in which the permission check evaluates them.
@@ -251,24 +154,9 @@ rows and rules explicitly where the H2 test database has no cascading keys.
 
 ## Permission resolution
 
-```mermaid
-flowchart TD
-    start([checkPermission user, function]) --> valid{user id and function given?}
-    valid -- no --> deny([deny])
-    valid -- yes --> exists{user exists?}
-    exists -- no --> deny
-    exists -- yes --> admin{admin?}
-    admin -- yes --> allow([allow])
-    admin -- no --> s1{"1: user → endpoint rule?"}
-    s1 -- match --> result([decision of that step])
-    s1 -- none --> s2{"2: user's groups → endpoint rule?"}
-    s2 -- match --> result
-    s2 -- none --> s3{"3: user → endpoint-group rule?"}
-    s3 -- match --> result
-    s3 -- none --> s4{"4: user's groups → endpoint-group rule?"}
-    s4 -- match --> result
-    s4 -- none --> deny
-```
+![Permission resolution: input checks, admin bypass and the four rule steps](images/database-permission-resolution.png)
+
+*Source: [`images/src/database-permission-resolution.mmd`](images/src/database-permission-resolution.mmd)*
 
 1. **Admins are always allowed.** Otherwise an empty rule table would lock them out as soon as the
    DaaS application enables the check.

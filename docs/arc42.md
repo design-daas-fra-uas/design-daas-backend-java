@@ -105,15 +105,9 @@ The DaaS application (design-daas) uses it to ask whether a user may call one of
 
 ### 3.1 Business context
 
-```mermaid
-flowchart LR
-    user([User / Admin]) -->|browser| fe[Frontend<br/>design-daas-application-frontend]
-    fe -->|REST, Bearer JWT| be[[DESIGN DaaS backend]]
-    daas[DaaS application<br/>design-daas] -->|permission check| be
-    be -->|SMTP| mail[Mail server]
-    mail -->|registration code,<br/>deletion notice,<br/>access request| user
-    be -->|JDBC| db[(MariaDB)]
-```
+![Business context: users, frontend, DaaS application, mail server and database around the backend](images/arc42-3-1-business-context.png)
+
+*Source: [`images/src/arc42-3-1-business-context.mmd`](images/src/arc42-3-1-business-context.mmd)*
 
 | Partner | Exchanged data |
 |---|---|
@@ -149,28 +143,9 @@ flowchart LR
 
 ### 5.1 Level 1: modules
 
-```mermaid
-flowchart TB
-    subgraph app [de.frauas.design.backend]
-        auth[auth<br/>tokens, session, revocation]
-        user[user<br/>users, admins, user groups, mail]
-        desktop[desktop<br/>desktops, desktop groups]
-        permission[permission<br/>check and management]
-        shared[shared<br/>errors, events, rate limiting,<br/>request ids, utilities]
-        config[config<br/>security, JWT keys, CORS,<br/>OpenAPI, async, properties]
-        bootstrap[bootstrap<br/>default admin]
-    end
-    auth --> user
-    user --> auth
-    user --> desktop
-    desktop --> user
-    permission --> user
-    permission --> auth
-    config --> auth
-    config --> user
-    bootstrap --> user
-    auth & user & desktop & permission --> shared
-```
+![Modules of the backend and their dependencies](images/arc42-5-1-level-1-modules.png)
+
+*Source: [`images/src/arc42-5-1-level-1-modules.mmd`](images/src/arc42-5-1-level-1-modules.mmd)*
 
 | Module | Responsibility | Main classes |
 |---|---|---|
@@ -220,71 +195,21 @@ controller ──► service ──► repository ──► model
 
 ### 6.1 Login (password grant)
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant C as Client
-    participant RL as RateLimitingFilter
-    participant TS as TokenService
-    participant DB as MariaDB
-    C->>RL: POST /oauth2/user/token (form)
-    RL->>RL: token bucket per IP and path
-    RL->>TS: grantToken(PasswordGrantRequest)
-    TS->>DB: find account by e-mail
-    alt unknown e-mail
-        TS->>TS: BCrypt check against dummy hash (equal timing)
-        TS-->>C: 401 invalid_grant
-    end
-    TS->>TS: reject if locked (429)
-    alt wrong password
-        TS->>DB: increment failed attempts, lock at 5
-        TS-->>C: 401 invalid_grant
-    end
-    TS->>TS: account enabled? requested scope = role?
-    TS->>DB: reset lockout, store access token (jti) and refresh token
-    TS-->>C: 200 access_token, refresh_token, scope, expires_in
-```
+![Sequence of a login with the password grant](images/arc42-6-1-login-password-grant.png)
+
+*Source: [`images/src/arc42-6-1-login-password-grant.mmd`](images/src/arc42-6-1-login-password-grant.mmd)*
 
 ### 6.2 Authenticated request
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant C as Client
-    participant F as Bearer token filter
-    participant V as TokenRevocationValidator
-    participant Ctl as Controller
-    C->>F: request with Authorization: Bearer JWT
-    F->>F: verify RS256 signature, exp, iss
-    F->>V: validate(jwt)
-    V->>V: jti known and not revoked?
-    V->>V: account exists and enabled?
-    V-->>F: valid / 401
-    F->>Ctl: authority SCOPE_user or SCOPE_admin
-    Ctl-->>C: 200, or 403 if @PreAuthorize fails
-```
+![Sequence of an authenticated request with token validation](images/arc42-6-2-authenticated-request.png)
+
+*Source: [`images/src/arc42-6-2-authenticated-request.mmd`](images/src/arc42-6-2-authenticated-request.mmd)*
 
 ### 6.3 Permission check by the DaaS application
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant D as DaaS application
-    participant P as PermissionService
-    participant DB as MariaDB
-    D->>P: GET /permissions/{function}/{userId} (admin token)
-    P->>DB: load account
-    alt unknown account
-        P-->>D: deny
-    else admin
-        P-->>D: allow
-    else regular user
-        loop steps 1 to 4, until a step has a match
-            P->>DB: rules of this step for user or groups and function
-        end
-        P-->>D: decision of the first matching step, otherwise deny
-    end
-```
+![Sequence of a permission check by the DaaS application](images/arc42-6-3-permission-check-by-the-daas-application.png)
+
+*Source: [`images/src/arc42-6-3-permission-check-by-the-daas-application.mmd`](images/src/arc42-6-3-permission-check-by-the-daas-application.mmd)*
 
 ### 6.4 Registration and account deletion
 
@@ -305,21 +230,9 @@ revoked. Of two concurrent requests with the same token, exactly one succeeds; t
 
 ### 6.6 Account lifecycle
 
-```mermaid
-stateDiagram-v2
-    [*] --> Unverified: POST /user
-    [*] --> Active: POST /admin, default admin at startup
-    Unverified --> Active: correct code (validate_email)
-    Unverified --> Unverified: resend_code (new code)
-    Active --> Locked: 5 failed logins
-    Locked --> Active: lock expired, then correct password
-    Active --> Disabled: admin disables
-    Disabled --> Active: admin enables
-    Unverified --> Deleted: admin deletes
-    Active --> Deleted: admin deletes
-    Disabled --> Deleted: admin deletes
-    Deleted --> [*]
-```
+![Account lifecycle: unverified, active, locked, disabled, deleted](images/arc42-6-6-account-lifecycle.png)
+
+*Source: [`images/src/arc42-6-6-account-lifecycle.mmd`](images/src/arc42-6-6-account-lifecycle.mmd)*
 
 | State | Stored as | Can log in | Notes |
 |---|---|---|---|
@@ -346,27 +259,9 @@ An admin enabling an account also enables an account whose e-mail was never veri
 
 ### 7.1 General deployment
 
-```mermaid
-flowchart LR
-    subgraph internet [Internet]
-        browser[Browser]
-    end
-    subgraph edge [Edge]
-        proxy[Reverse proxy<br/>TLS termination]
-    end
-    subgraph host [Application host]
-        backend[backend container<br/>port 8080]
-        keys[(volume /app/keys<br/>signing key)]
-        db[(MariaDB)]
-        daas[DaaS application]
-    end
-    smtp[SMTP server]
-    browser -->|HTTPS| proxy -->|HTTP, X-Forwarded-For| backend
-    daas -->|HTTP| backend
-    backend --- keys
-    backend -->|3306| db
-    backend -->|587| smtp
-```
+![General deployment with reverse proxy, backend container, MariaDB and SMTP](images/arc42-7-1-general-deployment.png)
+
+*Source: [`images/src/arc42-7-1-general-deployment.mmd`](images/src/arc42-7-1-general-deployment.mmd)*
 
 | Element | Notes |
 |---|---|
@@ -381,15 +276,9 @@ flowchart LR
 The installer in the `design-daas` repository (`installer/auth/`) runs the backend on the same
 host as the DaaS application:
 
-```mermaid
-flowchart LR
-    browser[Browser] -->|"HTTPS :8443 /auth/"| nginx[nginx]
-    nginx -->|"HTTP 127.0.0.1:8080"| backend[daas-auth container]
-    daas[DaaS backend] -->|"HTTP 127.0.0.1:8080"| backend
-    backend -->|docker network| db[(daas-auth-db<br/>MariaDB 11.4)]
-    backend --- keys[(volume keys)]
-    db --- data[(volume db-data)]
-```
+![Reference installation with the DESIGN installer](images/arc42-7-2-reference-installation-with-the-design-installer.png)
+
+*Source: [`images/src/arc42-7-2-reference-installation-with-the-design-installer.mmd`](images/src/arc42-7-2-reference-installation-with-the-design-installer.mmd)*
 
 | Aspect | Setup |
 |---|---|
@@ -527,23 +416,9 @@ Javadoc, and each module has a `package-info.java`. The conventions are in the
 
 ### 10.1 Quality tree
 
-```mermaid
-flowchart LR
-    q[Quality] --> c[Correctness]
-    q --> s[Security]
-    q --> m[Maintainability]
-    q --> o[Operability]
-    c --> c1[Fail-closed cascade<br/>NFA-1, NFA-2]
-    c --> c2[API compatibility<br/>NFA-3]
-    s --> s1[Hashing, lockout<br/>NFA-4]
-    s --> s2[Rate limiting<br/>NFA-5]
-    s --> s3[Revocation<br/>NFA-6]
-    m --> m1[Enforced layering<br/>NFA-8]
-    m --> m2[Coverage gate<br/>NFA-9]
-    m --> m3[Documentation<br/>NFA-10]
-    o --> o1[Stateless<br/>NFA-7]
-    o --> o2[Simple installation<br/>NFA-11]
-```
+![Quality tree with the non-functional requirements](images/arc42-10-1-quality-tree.png)
+
+*Source: [`images/src/arc42-10-1-quality-tree.mmd`](images/src/arc42-10-1-quality-tree.mmd)*
 
 ### 10.2 Quality scenarios
 

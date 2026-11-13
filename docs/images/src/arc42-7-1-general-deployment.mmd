@@ -1,0 +1,19 @@
+flowchart LR
+    subgraph internet [Internet]
+        browser[Browser]
+    end
+    subgraph edge [Edge]
+        proxy[Reverse proxy<br/>TLS termination]
+    end
+    subgraph host [Application host]
+        backend[backend container<br/>port 8080]
+        keys[(volume /app/keys<br/>signing key)]
+        db[(MariaDB)]
+        daas[DaaS application]
+    end
+    smtp[SMTP server]
+    browser -->|HTTPS| proxy -->|HTTP, X-Forwarded-For| backend
+    daas -->|HTTP| backend
+    backend --- keys
+    backend -->|3306| db
+    backend -->|587| smtp

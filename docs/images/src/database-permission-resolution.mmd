@@ -1,0 +1,16 @@
+flowchart LR
+    start([Request:<br/>user, function]) --> valid{Input<br/>complete?}
+    valid -- no --> deny1([deny])
+    valid -- yes --> exists{User<br/>exists?}
+    exists -- no --> deny2([deny])
+    exists -- yes --> admin{Admin?}
+    admin -- yes --> allow([allow])
+    admin -- no --> s1{"Step 1<br/>user → endpoint"}
+    s1 -- none --> s2{"Step 2<br/>groups → endpoint"}
+    s2 -- none --> s3{"Step 3<br/>user → endpoint group"}
+    s3 -- none --> s4{"Step 4<br/>groups → endpoint group"}
+    s4 -- none --> deny3([deny])
+    s1 -- match --> result([rule decides:<br/>allow or deny])
+    s2 -- match --> result
+    s3 -- match --> result
+    s4 -- match --> result

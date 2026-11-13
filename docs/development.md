@@ -154,6 +154,21 @@ is uploaded as the build artifact `jacoco`.
 | Public methods with Javadoc (excluding `@Override` and Lombok) | 137 / 137 |
 | Modules with `package-info.java` | 7 / 7 |
 
+### Diagrams
+
+The diagrams in `docs/` are PNG images in `docs/images/`. Each one has its source, written in
+[Mermaid](https://mermaid.js.org), in `docs/images/src/` with the same name. To change a diagram:
+
+1. Edit the `.mmd` file.
+2. Render it again with the Mermaid CLI (needs Node.js; it downloads a browser on first use):
+
+   ```bash
+   npx -y @mermaid-js/mermaid-cli@11.4.2 -i docs/images/src/<name>.mmd \
+     -o docs/images/<name>.png -b white -s 2 -w 1400
+   ```
+
+3. Open the PNG and check that no labels overlap. Commit the `.mmd` and the `.png` together.
+
 ### HTML Javadoc
 
 ```bash
