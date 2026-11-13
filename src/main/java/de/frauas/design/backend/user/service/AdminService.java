@@ -85,7 +85,9 @@ public class AdminService {
      *
      * <p>Two rules keep the system manageable: an admin cannot delete their own account
      * (so nobody locks themselves out by mistake), and the last remaining admin cannot be
-     * deleted. Tokens are removed by the {@code ON DELETE CASCADE} foreign keys.</p>
+     * deleted. The admin rows are locked before they are counted, so two concurrent
+     * deletions cannot remove the last two admins. Tokens are removed by the
+     * {@code ON DELETE CASCADE} foreign keys.</p>
      *
      * @param id the ID of the admin to delete
      * @param callerId the ID of the admin performing the deletion (from the JWT subject)
@@ -100,7 +102,7 @@ public class AdminService {
             log.warn("deleteAdmin — rejected: admin id={} tried to delete themself", id);
             throw new AdminDeletionNotAllowedException("Admins cannot delete their own account");
         }
-        if (userRepository.countAdmins() <= 1) {
+        if (userRepository.findAllAdminsForUpdate().size() <= 1) {
             log.warn("deleteAdmin — rejected: id={} is the last admin", id);
             throw new AdminDeletionNotAllowedException("The last admin cannot be deleted");
         }

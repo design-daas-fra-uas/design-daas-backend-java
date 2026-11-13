@@ -3,7 +3,9 @@ package de.frauas.design.backend.user.repository;
 import de.frauas.design.backend.user.model.Admin;
 import de.frauas.design.backend.user.model.BaseUser;
 import de.frauas.design.backend.user.model.User;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -34,9 +36,16 @@ public interface UserRepository extends JpaRepository<BaseUser, Integer> {
     @Query("SELECT a FROM Admin a WHERE a.id = :id")
     Optional<Admin> findAdminById(@Param("id") Integer id);
 
-    /** Counts all admin accounts. */
-    @Query("SELECT COUNT(a) FROM Admin a")
-    long countAdmins();
+    /**
+     * Returns all admin accounts and locks their rows until the transaction ends.
+     *
+     * <p>Used by the last-admin check: two concurrent deletions would otherwise both see two
+     * admins and leave none. The size of the result must be used as the count, because a plain
+     * {@code COUNT} query would read the transaction's older snapshot, not the locked rows.</p>
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM Admin a ORDER BY a.id")
+    List<Admin> findAllAdminsForUpdate();
 
     /** Finds a regular user by ID, excluding admins. */
     @Query("SELECT u FROM User u WHERE u.id = :id")

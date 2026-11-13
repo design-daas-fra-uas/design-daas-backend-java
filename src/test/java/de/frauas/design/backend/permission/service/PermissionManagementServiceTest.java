@@ -7,6 +7,7 @@ import de.frauas.design.backend.permission.dto.EndpointGroupPatchRequest;
 import de.frauas.design.backend.permission.dto.PermissionRuleCreateRequest;
 import de.frauas.design.backend.permission.dto.PermissionRuleDto;
 import de.frauas.design.backend.permission.dto.PermissionRuleKind;
+import de.frauas.design.backend.permission.exception.AdminRuleNotAllowedException;
 import de.frauas.design.backend.permission.exception.EndpointAlreadyExistsException;
 import de.frauas.design.backend.permission.exception.EndpointGroupAlreadyExistsException;
 import de.frauas.design.backend.permission.exception.EndpointNotFoundException;
@@ -24,6 +25,8 @@ import de.frauas.design.backend.permission.repository.EndpointUserAccessReposito
 import de.frauas.design.backend.permission.repository.EndpointUserGroupAccessRepository;
 import de.frauas.design.backend.user.exception.AccountNotFoundException;
 import de.frauas.design.backend.user.exception.UserGroupNotFoundException;
+import de.frauas.design.backend.user.model.Admin;
+import de.frauas.design.backend.user.model.User;
 import de.frauas.design.backend.user.repository.UserGroupRepository;
 import de.frauas.design.backend.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -262,7 +265,7 @@ class PermissionManagementServiceTest {
         @DisplayName("creates a USER_ENDPOINT rule")
         void createRule_userEndpoint_saves() {
             Endpoint endpoint = makeEndpoint(1, "vm_start");
-            when(userRepository.existsById(7)).thenReturn(true);
+            when(userRepository.findById(7)).thenReturn(Optional.of(makeUser(7)));
             when(endpointRepository.findById(1)).thenReturn(Optional.of(endpoint));
             when(endpointUserAccessRepo.existsByUserIdAndEndpoint_Id(7, 1)).thenReturn(false);
             when(endpointUserAccessRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -298,10 +301,22 @@ class PermissionManagementServiceTest {
         @Test
         @DisplayName("throws when the user does not exist")
         void createRule_unknownUser_throws() {
-            when(userRepository.existsById(7)).thenReturn(false);
+            when(userRepository.findById(7)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.createRule(makeRuleRequest(PermissionRuleKind.USER_ENDPOINT, 7, 1, true)))
                     .isInstanceOf(AccountNotFoundException.class);
+            verify(endpointUserAccessRepo, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("rejects a single-user rule for an admin, who is always allowed anyway")
+        void createRule_adminSubject_throws() {
+            Admin admin = new Admin();
+            admin.setId(7);
+            when(userRepository.findById(7)).thenReturn(Optional.of(admin));
+
+            assertThatThrownBy(() -> service.createRule(makeRuleRequest(PermissionRuleKind.USER_ENDPOINT, 7, 1, true)))
+                    .isInstanceOf(AdminRuleNotAllowedException.class);
             verify(endpointUserAccessRepo, never()).save(any());
         }
 
@@ -318,7 +333,7 @@ class PermissionManagementServiceTest {
         @Test
         @DisplayName("throws on a duplicate rule")
         void createRule_duplicate_throws() {
-            when(userRepository.existsById(7)).thenReturn(true);
+            when(userRepository.findById(7)).thenReturn(Optional.of(makeUser(7)));
             when(endpointRepository.findById(1)).thenReturn(Optional.of(makeEndpoint(1, "vm_start")));
             when(endpointUserAccessRepo.existsByUserIdAndEndpoint_Id(7, 1)).thenReturn(true);
 
@@ -372,5 +387,11 @@ class PermissionManagementServiceTest {
                     .isInstanceOf(PermissionRuleNotFoundException.class);
             verify(endpointUserAccessRepo, never()).deleteById(any());
         }
+    }
+
+    private static User makeUser(int id) {
+        User user = new User();
+        user.setId(id);
+        return user;
     }
 }

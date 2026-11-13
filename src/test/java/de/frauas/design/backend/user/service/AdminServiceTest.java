@@ -146,7 +146,7 @@ class AdminServiceTest {
         void deleteAdmin_otherAdmin_deletesAndMails() {
             Admin target = makeAdmin(2, "target@example.com");
             when(userRepository.findAdminById(2)).thenReturn(Optional.of(target));
-            when(userRepository.countAdmins()).thenReturn(2L);
+            when(userRepository.findAllAdminsForUpdate()).thenReturn(List.of(makeAdmin(1, "me@example.com"), target));
 
             adminService.deleteAdmin(2, 1);
 
@@ -169,7 +169,7 @@ class AdminServiceTest {
         void deleteAdmin_lastAdmin_throws() {
             Admin only = makeAdmin(2, "only@example.com");
             when(userRepository.findAdminById(2)).thenReturn(Optional.of(only));
-            when(userRepository.countAdmins()).thenReturn(1L);
+            when(userRepository.findAllAdminsForUpdate()).thenReturn(List.of(only));
 
             assertThatThrownBy(() -> adminService.deleteAdmin(2, 1))
                     .isInstanceOf(AdminDeletionNotAllowedException.class);

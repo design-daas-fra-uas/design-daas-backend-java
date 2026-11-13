@@ -8,6 +8,7 @@ import de.frauas.design.backend.permission.dto.EndpointGroupPatchRequest;
 import de.frauas.design.backend.permission.dto.PermissionRuleCreateRequest;
 import de.frauas.design.backend.permission.dto.PermissionRuleDto;
 import de.frauas.design.backend.permission.dto.PermissionRuleKind;
+import de.frauas.design.backend.permission.exception.AdminRuleNotAllowedException;
 import de.frauas.design.backend.permission.exception.EndpointAlreadyExistsException;
 import de.frauas.design.backend.permission.exception.EndpointGroupAlreadyExistsException;
 import de.frauas.design.backend.permission.exception.EndpointGroupNotFoundException;
@@ -28,6 +29,8 @@ import de.frauas.design.backend.permission.repository.EndpointUserAccessReposito
 import de.frauas.design.backend.permission.repository.EndpointUserGroupAccessRepository;
 import de.frauas.design.backend.user.exception.AccountNotFoundException;
 import de.frauas.design.backend.user.exception.UserGroupNotFoundException;
+import de.frauas.design.backend.user.model.Admin;
+import de.frauas.design.backend.user.model.BaseUser;
 import de.frauas.design.backend.user.repository.UserGroupRepository;
 import de.frauas.design.backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -359,12 +362,14 @@ public class PermissionManagementService {
     }
 
     /**
-     * Checks that a rule's subject exists. Rules for a single user may target any account,
-     * admins included, because design-daas checks admins too.
+     * Checks that a rule's subject exists and can be affected by a rule. A single-user rule
+     * must name a regular user: admins are always allowed by {@link PermissionService}, so a
+     * rule for an admin would never be evaluated.
      *
      * @param kind the rule's kind, which decides whether the subject is a user or a user group
      * @param subjectId the user or user-group ID
      * @throws AccountNotFoundException if no account exists with the given id
+     * @throws AdminRuleNotAllowedException if the account is an admin
      * @throws UserGroupNotFoundException if no user group exists with the given id
      */
     private void assertSubjectExists(PermissionRuleKind kind, Integer subjectId) {
@@ -373,9 +378,15 @@ public class PermissionManagementService {
                 log.warn("createRule — userGroupId={} not found", subjectId);
                 throw new UserGroupNotFoundException(subjectId);
             }
-        } else if (!userRepository.existsById(subjectId)) {
-            log.warn("createRule — userId={} not found", subjectId);
-            throw new AccountNotFoundException(subjectId);
+        } else {
+            BaseUser account = userRepository.findById(subjectId).orElseThrow(() -> {
+                log.warn("createRule — userId={} not found", subjectId);
+                return new AccountNotFoundException(subjectId);
+            });
+            if (account instanceof Admin) {
+                log.warn("createRule — rejected: userId={} is an admin", subjectId);
+                throw new AdminRuleNotAllowedException(subjectId);
+            }
         }
     }
 
