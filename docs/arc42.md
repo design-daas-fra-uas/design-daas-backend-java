@@ -1,334 +1,635 @@
-[README](../README.md) · [User manual](user-manual.md) · [API](api.md) · [Database](database.md) · [Architecture (arc42)](arc42.md) · [Development](development.md) · [Operations](operations.md)
-
 # Architecture documentation (arc42)
+
+> **Audience:** architects and developers · **Template:** [arc42](https://arc42.org), version 8
+> **Last reviewed:** 2026-11-13 · [Documentation index](../README.md#documentation)
+
+This document explains how the DESIGN DaaS backend is built and why. It follows arc42, a common
+template for architecture documentation. The requirement ids (FA-*n* for functional, NFA-*n* for
+non-functional requirements) refer to chapter 3 of the accompanying master's thesis.
+
+## At a glance
+
+- **What it is:** one Spring Boot service that signs users in, manages accounts, groups and
+  desktops, and answers the question *"may this user use this function?"* for the DaaS
+  application.
+- **Who uses it:** the web frontend (for people) and the DaaS application (for permission checks).
+- **How it is built:** four feature modules (`auth`, `user`, `desktop`, `permission`), each split
+  into the same layers. The build checks this structure automatically.
+- **How it stays secure:** hashed passwords, signed tokens that can be cancelled at any time,
+  account lockout, request limits, and a permission check that denies whenever in doubt.
+- **How it runs:** a single container with a MariaDB database, configured through environment
+  variables.
+
+## How to read this document
+
+| Section | Answers the question |
+|---|---|
+| [1. Introduction and goals](#1-introduction-and-goals) | What must the system do, and what matters most? |
+| [2. Constraints](#2-constraints) | What was fixed from the start? |
+| [3. Context and scope](#3-context-and-scope) | Which systems does it talk to? |
+| [4. Solution strategy](#4-solution-strategy) | What is the basic approach to each goal? |
+| [5. Building block view](#5-building-block-view) | Which parts does the code consist of? |
+| [6. Runtime view](#6-runtime-view) | What happens during the important requests? |
+| [7. Deployment view](#7-deployment-view) | Where and how does it run? |
+| [8. Cross-cutting concepts](#8-cross-cutting-concepts) | Which rules apply everywhere (security, errors, logging)? |
+| [9. Architecture decisions](#9-architecture-decisions) | Which important choices were made, and why? |
+| [10. Quality requirements](#10-quality-requirements) | How do we know the goals are met? |
+| [11. Risks and technical debt](#11-risks-and-technical-debt) | What is still weak, and what was fixed? |
+| [12. Glossary](#12-glossary) | What do the terms mean? |
+
+**Status markers** used in tables: ✅ implemented or passed · ❌ not implemented ·
+high risk · medium risk.
+
+---
 
 ## 1. Introduction and goals
 
-**Purpose.** The backend is the identity, authorization and inventory service of DESIGN DaaS.
-Frontends and the DESIGN DaaS platform use it to authenticate users, manage who may use which
-desktops, and ask whether a user may run a given function.
+### 1.1 Purpose
 
-**Main quality goals**
+The backend is the identity, authorization and inventory service of DESIGN DaaS (Desktop as a
+Service) at Frankfurt University of Applied Sciences. It replaces the earlier PHP/Symfony
+backend. The frontend uses it to sign users in and to administer accounts, groups and desktops.
+The DaaS application (design-daas) uses it to ask whether a user may call one of its functions.
 
-| Priority | Goal | How it is achieved |
-|---|---|---|
-| 1 | **Security** | BCrypt(12), RS256 JWTs, server-side revocation checked on every request, token rotation, account lockout, IP rate limiting, no stack traces in responses, PII masked in logs |
-| 2 | **Compatibility** with the legacy PHP API | Same paths (`/user_group`, `/permissions_info`, ...), snake_case JSON, same permission cascade and response shape |
-| 3 | **Maintainability** | Feature packages, thin controllers, ArchUnit-enforced layering, injected `Clock`, sealed `GrantRequest` type |
-| 4 | **Operability** | Flyway migrations, 12-factor configuration through environment variables, Docker image, scheduled token cleanup |
+### 1.2 Requirements overview
 
-**Stakeholders**
+| Id | Requirement | Realized by | Status |
+|---|---|---|---|
+| FA-1 | Login with user name and password returns an access token | `POST /oauth2/user/token` (password grant) | ✅ |
+| FA-2 | An expired access token can be renewed with a refresh token | `POST /oauth2/user/token` (refresh grant, rotation) | ✅ |
+| FA-3 | Logout revokes the token on the server, before it expires | `POST /oauth2/user/logout` | ✅ |
+| FA-4 | The session behind a valid token can be queried | `GET /oauth2/user/session` | ✅ |
+| FA-5 | Self-registration with e-mail confirmation by a time-limited code | `POST /user`, `/user/validate_email`, `/user/resend_code` | ✅ |
+| FA-6 | Admins list, view, change, enable/disable and delete users | `/users`, `/user/{id}` | ✅ |
+| FA-7 | Admins create, list, view and delete admin accounts | `/admins`, `/admin`, `/admin/{id}` | ✅ |
+| FA-8 | Admins manage user groups and link them to desktop groups | `/user_group*`, `/desktop_group/{id}/user_group/{ugId}` | ✅ |
+| FA-9 | Users request access to an application; admins are notified by e-mail | `POST /user/request-application/…` | ✅ |
+| FA-10 | Admins create, view and list desktops | `/desktops`, `/desktop` | ✅ |
+| FA-11 | Admins create and list desktop groups and link them to user groups | `/desktop_groups`, `/desktop_group` | ✅ |
+| FA-12 | Users check whether they have access to a desktop | Not provided, because neither client calls it (thesis, section 5.3) | ❌ |
+| FA-13 | Check whether a user may call a function, using the four-step cascade | `/permissions/{fn}/{user}`, `/permissions_info` | ✅ |
 
-| Role | Expectation |
+### 1.3 Quality goals
+
+| Priority | Quality goal | Related requirements | Main measures |
+|---|---|---|---|
+| 1 | **Correct, fail-closed authorization** | NFA-1, NFA-2 | Four-step cascade with fixed precedence, deny on any doubt, deny wins within a step |
+| 2 | **Compatibility** with the clients of the PHP backend | NFA-3 | Same paths, methods, JSON fields and status codes for every endpoint the clients call |
+| 3 | **Security** of accounts and tokens | NFA-4 – NFA-6 | BCrypt, account lockout, rate limiting, RS256 JWTs with server-side revocation |
+| 4 | **Maintainability and testability** | NFA-8 – NFA-10 | Feature modules, ArchUnit rules, coverage gate in the build, generated API documentation |
+| 5 | **Simple operation** | NFA-7, NFA-11 | Stateless service, one container, configuration through environment variables, Flyway |
+
+### 1.4 Stakeholders
+
+| Stakeholder | Expectation |
 |---|---|
-| End users (students, staff) | Easy registration and login, reliable access to their desktops |
-| Admins | Manage users, groups, desktops and access |
-| Frontend developers | A stable, documented REST API (Swagger) |
-| DESIGN DaaS platform | A fast, correct allow/deny answer |
-| Ops / DevOps | Simple deployment, clear configuration, safe secrets handling |
-| Frankfurt UAS / maintainers | A codebase that students can understand and extend |
+| Students and staff (end users) | Simple registration and login; reliable access to their desktops |
+| Administrators | Manage accounts, groups, desktops and permissions without database access |
+| Frontend developers | A stable, documented REST API |
+| DaaS application (design-daas) | A fast and correct allow/deny answer |
+| Operators | Simple installation, clear configuration, safe handling of secrets |
+| Frankfurt UAS, future maintainers | A codebase that new contributors can understand and extend |
 
 ## 2. Constraints
 
-| Type | Constraint |
-|---|---|
-| Technical | Java 21, Spring Boot 4.x, MariaDB, deployable as a single container |
-| Technical | Must keep the PHP backend's API contract for existing clients |
-| Organizational | University project; contributors change regularly, so documentation and tests matter |
-| Legal | GDPR: e-mail addresses and names are personal data. JWTs contain `email` and `name`, and logs mask e-mails |
-| Conventions | Classes end in `*Controller`, `*Service` and `*Repository` and live in the matching package (checked by ArchUnit) |
+| Category | Constraint | Background |
+|---|---|---|
+| Technical | Java 21, Spring Boot 4.1, MariaDB | Specified by the project; MariaDB is used by the other DESIGN components |
+| Technical | Deployable as a single container | Must fit the installer of the DaaS application (NFA-11) |
+| Compatibility | Keep the API contract that the frontend and the DaaS application use | Both clients must keep working (NFA-3) |
+| Organizational | University project with changing contributors | Documentation and automated checks matter more than personal knowledge |
+| Legal | GDPR | Names and e-mail addresses are personal data. They are masked in logs and are part of the JWT, so tokens must be treated as personal data |
+| Conventions | English code, comments and documentation | Common practice in open-source projects |
 
 ## 3. Context and scope
 
+### 3.1 Business context
+
 ```mermaid
 flowchart LR
-    U[User / Admin<br/>browser] -->|HTTPS| FE[DESIGN DaaS<br/>Frontend]
-    FE -->|REST + Bearer JWT| BE[[Design DaaS<br/>Backend]]
-    P[DESIGN DaaS platform<br/>desktop orchestration] -->|/permissions*| BE
-    BE -->|JDBC| DB[(MariaDB)]
-    BE -->|SMTP| M[Mail server]
-    M -->|registration code,<br/>access requests| U
+    user([User / Admin]) -->|browser| fe[Frontend<br/>design-daas-application-frontend]
+    fe -->|REST, Bearer JWT| be[[DESIGN DaaS backend]]
+    daas[DaaS application<br/>design-daas] -->|permission check| be
+    be -->|SMTP| mail[Mail server]
+    mail -->|registration code,<br/>deletion notice,<br/>access request| user
+    be -->|JDBC| db[(MariaDB)]
 ```
 
-| Partner | Interface | Data |
+| Partner | Exchanged data |
+|---|---|
+| Frontend | Credentials and tokens; users, admins, groups, desktops and permission data |
+| DaaS application | Function name and user id (or token) → `allow` / `deny` |
+| Mail server | Registration codes, account-deletion notices, application-access requests |
+| MariaDB | All persistent state |
+
+### 3.2 Technical context
+
+| Interface | Protocol | Notes |
 |---|---|---|
-| Frontend | REST/JSON, OAuth2-style token endpoint | Credentials, tokens, users, groups, desktops |
-| DESIGN DaaS platform | `GET /permissions/{fn}/{user}`, `POST /permissions_info` | Function name, user id or token → allow/deny |
-| MariaDB | JDBC | All persistent state |
-| SMTP server | SMTP + STARTTLS | Registration codes, application-access requests |
+| REST API | HTTP/JSON; the token endpoint uses form encoding | TLS ends at the reverse proxy; the backend listens on port 8080 |
+| Database | JDBC (MariaDB driver) | Schema owned by Flyway |
+| Mail | SMTP with STARTTLS (port 587) | Optional; disabled by default |
+| Health | `GET /actuator/health` | For container and load-balancer probes |
+| Request correlation | `X-Request-ID` header | Shared by frontend, DaaS application and backend logs |
 
 ## 4. Solution strategy
 
-| Decision | Reason |
+| Goal | Approach |
 |---|---|
-| **Self-issued JWTs** (Nimbus via Spring Security's `JwtEncoder`) instead of Spring Authorization Server or an external IdP | Simple password and refresh grants with the legacy API shape, and no extra infrastructure |
-| **Stateful revocation** (every `jti` is stored and checked) | Logout, disable and password change must take effect immediately, not after the token expires |
-| **Opaque, rotating refresh tokens** with a pessimistic lock | Stolen refresh tokens are single-use, and concurrent refreshes cannot both succeed |
-| **Package by feature** (`auth`, `user`, `desktop`, `permission`) plus `shared` | Clear module boundaries and easier onboarding |
-| **Events between modules** (`UserSessionsInvalidatedEvent`) | `user` can trigger token revocation without depending on `auth` |
-| **Flyway + `ddl-auto: validate`** | Reproducible schema; Hibernate never changes production tables |
-| **Mail after commit + bounded async pool** | A slow SMTP server never blocks requests or holds DB locks |
+| Compatibility (NFA-3) | Reproduce the used endpoints of the PHP backend exactly; drop unused ones; document every deviation ([API reference](api.md#14-differences-from-the-php-backend)) |
+| Fail-closed authorization (NFA-1, NFA-2) | Port the permission cascade, but resolve conflicts within a step deterministically (deny wins) instead of by random group order |
+| Revocable tokens (NFA-6) | Self-issued RS256 JWTs; every `jti` is stored and checked on each request |
+| Stateless scaling (NFA-7) | No HTTP session; all state lives in MariaDB |
+| Enforced architecture (NFA-8) | Package by feature, layered inside each module, checked by 19 ArchUnit rules |
+| Enforced quality (NFA-9) | JaCoCo gate of 80 % line and branch coverage in `mvn verify`, run by CI on every push and pull request |
+| Documentation that cannot drift (NFA-10) | OpenAPI generated from the code; Javadoc on every type and public method |
+| Simple installation (NFA-11) | One container image, environment variables, schema created by Flyway, bootstrap admin |
 
 ## 5. Building block view
 
-### Level 1: modules
+### 5.1 Level 1: modules
 
 ```mermaid
 flowchart TB
-    subgraph backend [de.frauas.design.backend]
-        auth[auth<br/>token, session, revocation]
+    subgraph app [de.frauas.design.backend]
+        auth[auth<br/>tokens, session, revocation]
         user[user<br/>users, admins, user groups, mail]
         desktop[desktop<br/>desktops, desktop groups]
-        permission[permission<br/>4-step permission cascade]
-        shared[shared<br/>errors, events, rate limiting, utils]
-        config[config<br/>security, JWT keys, CORS, OpenAPI, async]
+        permission[permission<br/>check and management]
+        shared[shared<br/>errors, events, rate limiting,<br/>request ids, utilities]
+        config[config<br/>security, JWT keys, CORS,<br/>OpenAPI, async, properties]
         bootstrap[bootstrap<br/>default admin]
     end
     auth --> user
+    user --> auth
+    user --> desktop
     desktop --> user
     permission --> user
     permission --> auth
-    user -.event.-> shared
-    auth -.listens.-> shared
     config --> auth
     config --> user
+    bootstrap --> user
+    auth & user & desktop & permission --> shared
 ```
 
-### Level 2: layers inside each module (checked by ArchUnit)
+| Module | Responsibility | Main classes |
+|---|---|---|
+| `auth` | Password and refresh grants, logout, session query, token revocation and cleanup | `TokenService`, `TokenIssuer`, `TokenRevocationValidator`, `TokenRevocationService` |
+| `user` | Registration and verification, user and admin administration, user groups, e-mail | `UserService`, `AdminService`, `UserGroupService`, `MailService` |
+| `desktop` | Desktop and desktop-group inventory, links to user groups | `DesktopService` |
+| `permission` | Permission check (cascade) and maintenance of endpoints, endpoint groups and rules | `PermissionService`, `PermissionManagementService` |
+| `shared` | Error mapping, cross-module events, rate limiting, request ids, password policy, log masking | `GlobalExceptionHandler`, `RateLimitingFilter`, `RequestIdFilter`, `AfterCommit` |
+| `config` | Spring configuration and typed `app.*` properties | `SecurityConfig`, `AuthorizationServerConfig` |
+| `bootstrap` | Startup tasks | `DataInitializer` |
+
+The arrows show compile-time dependencies. `auth` ↔ `user` and `user` ↔ `desktop` depend on each
+other in both directions; see [risk R-10](#111-open-risks-and-technical-debt).
+
+### 5.2 Level 2: layers inside a module
 
 ```
-controller  →  service  →  repository  →  model
-    ↓             ↓
-   dto          dto
+controller ──► service ──► repository ──► model
+     │            │
+     └──► dto ◄───┘
 ```
 
-| Package | Responsibility |
+| Layer | Responsibility | Enforced rule |
+|---|---|---|
+| `controller` | HTTP mapping, `@PreAuthorize`, request logging | Not used by any other layer |
+| `service` | Business rules and transactions | Used only by controllers, config, other services and bootstrap |
+| `repository` | Spring Data JPA queries | Used only by services, config and bootstrap |
+| `model` | JPA entities | Does not depend on services or controllers |
+| `dto` | Request and response types with `from(entity)` mappers | – |
+| `exception` | Typed exceptions, each mapped to one HTTP status | – |
+
+### 5.3 Level 2: authentication components
+
+| Component | Responsibility |
 |---|---|
-| `*.controller` | HTTP mapping, `@PreAuthorize`, request logging. No business logic |
-| `*.service` | Business rules, transactions |
-| `*.repository` | Spring Data JPA interfaces and JPQL |
-| `*.model` | JPA entities |
-| `*.dto` | Request and response types, plus `from(entity)` mappers |
-| `*.exception` | Typed exceptions mapped to HTTP status codes |
-
-### Important classes
-
-| Class | Role |
-|---|---|
-| `SecurityConfig` | Filter chain: stateless, CSRF off, public paths, JWT resource server |
-| `AuthorizationServerConfig` | Loads or creates the RSA key; `JwtEncoder`; `JwtDecoder` with issuer and revocation validators |
-| `TokenService` | Password and refresh grants (coordinates the next three classes) |
-| `TokenIssuer` | Creates and stores access JWTs and refresh tokens |
-| `AccountLockoutService` | 5 failures → 15 min lock |
-| `ScopeResolver` | Scope = role; stops scope escalation |
-| `TokenRevocationValidator` | Runs on **every** request: `jti` known and not revoked, user exists and is enabled |
-| `TokenRevocationService` | Logout and revoke-all (listens for `UserSessionsInvalidatedEvent`) |
-| `TokenCleanupService` | Daily purge of expired tokens |
-| `PermissionService` | 4-step cascade |
-| `RateLimitingFilter` / `RateLimiter` / `TokenBucket` | Per-IP, per-path limits in memory |
-| `ClientIpResolver` | Trusts `X-Forwarded-For` only from trusted proxy CIDRs |
-| `GlobalExceptionHandler` | Maps exceptions to `{message}`; returns a correlation ID for 500s |
-| `DataInitializer` | Creates the bootstrap admin |
+| `TokenController` | Thin HTTP adapter for `/oauth2/user/token` and `/oauth2/user/logout` |
+| `GrantRequest` | Sealed type with one record per grant; `TokenService` dispatches with an exhaustive `switch` |
+| `TokenService` | Orchestrates both grants |
+| `AccountLockoutService` | Five failures lock the account for 15 minutes |
+| `ScopeResolver` | Scope equals the role; rejects any other requested scope |
+| `TokenIssuer` | Signs JWTs and creates refresh tokens; stores both |
+| `TokenRevocationValidator` | Part of the JWT decoder: rejects revoked tokens and missing or disabled users on every request |
+| `TokenRevocationService` | Logout and revoke-all; listens for `UserSessionsInvalidatedEvent` |
+| `TokenCleanupService` | Deletes expired tokens daily |
 
 ## 6. Runtime view
 
-### Login (password grant)
+### 6.1 Login (password grant)
 
 ```mermaid
 sequenceDiagram
+    autonumber
     participant C as Client
     participant RL as RateLimitingFilter
-    participant TC as TokenController
     participant TS as TokenService
     participant DB as MariaDB
     C->>RL: POST /oauth2/user/token (form)
-    RL->>RL: token bucket per IP+path
-    RL->>TC: pass (or 429)
-    TC->>TS: grantToken(PasswordGrantRequest)
-    TS->>DB: findByEmail
-    alt unknown user
-        TS->>TS: BCrypt against dummy hash (timing)
+    RL->>RL: token bucket per IP and path
+    RL->>TS: grantToken(PasswordGrantRequest)
+    TS->>DB: find account by e-mail
+    alt unknown e-mail
+        TS->>TS: BCrypt check against dummy hash (equal timing)
         TS-->>C: 401 invalid_grant
     end
-    TS->>TS: assertNotLocked (429 if locked)
-    TS->>TS: BCrypt.matches
+    TS->>TS: reject if locked (429)
     alt wrong password
-        TS->>DB: failed_login_attempts++ (lock at 5)
+        TS->>DB: increment failed attempts, lock at 5
         TS-->>C: 401 invalid_grant
     end
-    TS->>TS: enabled? scope == role?
-    TS->>DB: reset lockout, INSERT access_tokens(jti), INSERT refresh_tokens
-    TS-->>C: 200 {access_token, refresh_token, scope, expires_in}
+    TS->>TS: account enabled? requested scope = role?
+    TS->>DB: reset lockout, store access token (jti) and refresh token
+    TS-->>C: 200 access_token, refresh_token, scope, expires_in
 ```
 
-### Authenticated request
+### 6.2 Authenticated request
 
 ```mermaid
 sequenceDiagram
+    autonumber
     participant C as Client
-    participant F as Spring Security (BearerTokenFilter)
-    participant D as JwtDecoder
+    participant F as Bearer token filter
     participant V as TokenRevocationValidator
-    participant Ctl as Controller (@PreAuthorize)
-    C->>F: GET /users  Authorization: Bearer JWT
-    F->>D: decode + verify RS256 signature
-    D->>D: exp / nbf / iss checks
-    D->>V: validate(jwt)
-    V->>V: SELECT access_tokens WHERE jti=? (revoked?)
-    V->>V: SELECT users WHERE id=sub (enabled?)
-    V-->>F: ok / 401 invalid_token
-    F->>Ctl: authorities = SCOPE_<scope>
-    Ctl-->>C: 200 / 403
+    participant Ctl as Controller
+    C->>F: request with Authorization: Bearer JWT
+    F->>F: verify RS256 signature, exp, iss
+    F->>V: validate(jwt)
+    V->>V: jti known and not revoked?
+    V->>V: account exists and enabled?
+    V-->>F: valid / 401
+    F->>Ctl: authority SCOPE_user or SCOPE_admin
+    Ctl-->>C: 200, or 403 if @PreAuthorize fails
 ```
 
-### Registration
+### 6.3 Permission check by the DaaS application
 
 ```mermaid
 sequenceDiagram
-    participant C as Client
-    participant US as UserService
+    autonumber
+    participant D as DaaS application
+    participant P as PermissionService
     participant DB as MariaDB
-    participant MS as MailService (@Async)
-    C->>US: POST /user
-    US->>US: password policy, e-mail unique
-    US->>DB: INSERT users (enabled=false, code, timeout=+24h)
-    US-->>C: 201
-    Note over US,MS: after commit
-    US->>MS: sendRegistrationCode
-    MS-->>C: e-mail with code
-    C->>US: POST /user/validate_email
-    US->>DB: enabled=true, code=NULL
-    US-->>C: 200
+    D->>P: GET /permissions/{function}/{userId} (admin token)
+    P->>DB: load account
+    alt unknown account
+        P-->>D: deny
+    else admin
+        P-->>D: allow
+    else regular user
+        loop steps 1 to 4, until a step has a match
+            P->>DB: rules of this step for user or groups and function
+        end
+        P-->>D: decision of the first matching step, otherwise deny
+    end
 ```
 
-### Refresh-token rotation
+### 6.4 Registration and account deletion
 
-The refresh grant runs `SELECT ... FOR UPDATE` on the token (`PESSIMISTIC_WRITE`), checks expiry
-and that the user is enabled, issues a new access token and refresh token, and marks the old
-refresh token `revoked`. A second request with the same token gets `401 invalid_grant`.
+Registration stores a disabled account with a code that is valid for 24 hours. After the
+transaction commits, `AfterCommit` hands the e-mail to the asynchronous mail executor. Confirming
+the code enables the account.
+
+Deleting an account removes it with its tokens, memberships and rules (see
+[Deletion behaviour](database.md#deletion-behaviour)) and e-mails a notice after the commit. An
+admin cannot delete their own account or the last remaining admin.
+
+### 6.5 Refresh-token rotation
+
+The refresh grant reads the token with a pessimistic write lock (`SELECT … FOR UPDATE`). It
+checks expiry and the account state, issues a new token pair and marks the old refresh token
+revoked. Of two concurrent requests with the same token, exactly one succeeds; the other receives
+`401 invalid_grant`.
+
+### 6.6 Account lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Unverified: POST /user
+    [*] --> Active: POST /admin, default admin at startup
+    Unverified --> Active: correct code (validate_email)
+    Unverified --> Unverified: resend_code (new code)
+    Active --> Locked: 5 failed logins
+    Locked --> Active: lock expired, then correct password
+    Active --> Disabled: admin disables
+    Disabled --> Active: admin enables
+    Unverified --> Deleted: admin deletes
+    Active --> Deleted: admin deletes
+    Disabled --> Deleted: admin deletes
+    Deleted --> [*]
+```
+
+| State | Stored as | Can log in | Notes |
+|---|---|---|---|
+| Unverified | `enabled = false`, `registration_code` set | No | The code expires after 24 hours; a new one can be requested |
+| Active | `enabled = true` | Yes | Admins start in this state |
+| Locked | `locked_until` in the future | No | Lasts 15 minutes. Only a later successful login resets the counter |
+| Disabled | `enabled = false` | No | All tokens are revoked at the moment of disabling |
+| Deleted | Row removed | No | Tokens, memberships and rules are removed; a notice is e-mailed |
+
+An admin enabling an account also enables an account whose e-mail was never verified.
+
+### 6.7 Token lifecycle
+
+| Event | Access token | Refresh token |
+|---|---|---|
+| Login | New one issued (valid 1 hour) | New one issued (valid 30 days) |
+| Refresh | New one issued; the old one stays valid until it expires | Old one revoked; new one issued |
+| Logout | The calling token is revoked | Revoked if sent with the request |
+| Password change, disable, delete | All of the user's tokens revoked | All of the user's tokens revoked |
+| Expiry | Rejected | Rejected; the row is deleted when it is next used |
+| Daily cleanup (03:00) | Expired rows deleted | Expired rows deleted |
 
 ## 7. Deployment view
 
+### 7.1 General deployment
+
 ```mermaid
 flowchart LR
-    subgraph Internet
-        B[Browser]
+    subgraph internet [Internet]
+        browser[Browser]
     end
-    subgraph DMZ
-        RP[Reverse proxy / TLS<br/>nginx, Traefik]
+    subgraph edge [Edge]
+        proxy[Reverse proxy<br/>TLS termination]
     end
-    subgraph App network
-        BE1[backend container<br/>:8080]
-        V[(volume<br/>/app/keys)]
-        DB[(MariaDB)]
+    subgraph host [Application host]
+        backend[backend container<br/>port 8080]
+        keys[(volume /app/keys<br/>signing key)]
+        db[(MariaDB)]
+        daas[DaaS application]
     end
-    SMTP[SMTP server]
-    B -->|HTTPS| RP -->|HTTP + X-Forwarded-For| BE1
-    BE1 --- V
-    BE1 -->|3306| DB
-    BE1 -->|587| SMTP
+    smtp[SMTP server]
+    browser -->|HTTPS| proxy -->|HTTP, X-Forwarded-For| backend
+    daas -->|HTTP| backend
+    backend --- keys
+    backend -->|3306| db
+    backend -->|587| smtp
 ```
 
-- TLS ends at the reverse proxy. Add the proxy's IP or CIDR to `RATE_LIMIT_TRUSTED_PROXIES`;
-  otherwise all clients share the proxy's IP for rate limiting.
-- **Running several replicas:** all of them must share the key volume (or the same key file).
-  Rate-limit buckets are **per instance**, so the effective limit is N × the configured limit.
-  Token revocation is safe because it lives in the database.
+| Element | Notes |
+|---|---|
+| Container image | Multi-stage `Dockerfile`: Maven build, then `eclipse-temurin:21-jre-alpine` |
+| Signing key | `rsa-jwk.json` in `/app/keys`; created on first start. Must persist and be shared by all replicas |
+| Reverse proxy | Add its address to `RATE_LIMIT_TRUSTED_PROXIES`; otherwise all clients share one rate limit |
+| Several replicas | Possible (NFA-7): revocation lives in the database. Rate-limit buckets are per instance, so the effective limit is *n* × the configured one |
+| Installation | Locally with Maven, as a container, or with the other DESIGN components through the DaaS-application installer ([Operations guide](operations.md)) |
+
+### 7.2 Reference installation with the DESIGN installer
+
+The installer in the `design-daas` repository (`installer/auth/`) runs the backend on the same
+host as the DaaS application:
+
+```mermaid
+flowchart LR
+    browser[Browser] -->|"HTTPS :8443 /auth/"| nginx[nginx]
+    nginx -->|"HTTP 127.0.0.1:8080"| backend[daas-auth container]
+    daas[DaaS backend] -->|"HTTP 127.0.0.1:8080"| backend
+    backend -->|docker network| db[(daas-auth-db<br/>MariaDB 11.4)]
+    backend --- keys[(volume keys)]
+    db --- data[(volume db-data)]
+```
+
+| Aspect | Setup |
+|---|---|
+| Service | systemd unit `daas-auth.service` starts a Docker Compose project with two containers: `daas-auth` (this backend) and `daas-auth-db` |
+| Network | Port 8080 is bound to `127.0.0.1` only. Browsers reach the backend through nginx at `/auth/` on port 8443; the DaaS application connects locally |
+| Proxy headers | nginx **overwrites** `X-Forwarded-For` with the client address, so clients cannot fake it. The backend trusts the header from `127.0.0.1`, `::1` and the Docker networks (`172.16.0.0/12`) |
+| Configuration | `installer/daas.env` → generated `installer/auth/.env` (mode 600). Profile `prod` by default |
+| Issuer | `AUTH_PUBLIC_URL`, by default the frontend URL plus `/auth` |
+| Operations | `make auth-install`, `auth-check`, `auth-backup`, `auth-admin-password`, `auth-logs`, `auth-restart` (see the installer's README) |
 
 ## 8. Cross-cutting concepts
 
+### 8.1 Security
+
 | Concept | Implementation |
 |---|---|
-| **Authentication** | Stateless JWT bearer tokens. RS256 with a 2048-bit key from `rsa-jwk.json`. Claims: `jti, iss, sub (user id), iat, exp, email, name, scope` |
-| **Authorization** | `scope` claim → authority `SCOPE_admin` / `SCOPE_user`; `@PreAuthorize(Authorities.IS_ADMIN)` on controllers or methods |
-| **Revocation** | DB lookup of `jti` and user `enabled` on every request |
-| **Passwords** | BCrypt strength 12; policy regex in `PasswordPolicy` |
-| **Brute force** | Per-account lockout plus per-IP token bucket |
-| **Validation** | Jakarta Bean Validation on DTOs and path variables; errors → `400 {message}` |
-| **Error handling** | `GlobalExceptionHandler` (global) and `TokenExceptionHandler` / `SessionExceptionHandler` (scoped by marker annotations `@TokenEndpoint` / `@SessionEndpoint`) |
-| **Logging** | SLF4J/Logback. E-mails masked with `LogMasking.maskEmail` (`j***@example.org`). Refresh tokens are never logged |
-| **Time** | Injected `Clock` (UTC) for testable expiry logic |
-| **Transactions** | Service-level `@Transactional`; `noRollbackFor = TokenGrantException` so the failed-login counter is saved even when login fails |
-| **Async** | `@Async` mail on a bounded pool (2–4 threads, queue 100); tasks are dropped when the queue is full |
-| **Scheduling** | `@Scheduled` token cleanup |
-| **CORS** | Exact origin list, all common methods, credentials allowed |
+| Authentication | Stateless bearer JWTs, RS256 with a 2048-bit RSA key. Claims: `jti`, `iss`, `sub` (user id), `iat`, `exp`, `email`, `name`, `scope` |
+| Authorization | `scope` → authority `SCOPE_user` / `SCOPE_admin`; `@PreAuthorize` on controllers |
+| Revocation | Database lookup of `jti` and account state on every request. Disabling, changing the password and deleting revoke all of a user's tokens |
+| Passwords | BCrypt with strength 12. Policy: 8–72 characters (BCrypt's input limit), upper and lower case, digit |
+| Brute-force protection | Account lockout after five failures, plus per-IP token buckets on the four public endpoints |
+| User enumeration | Equal timing for unknown accounts; `resend_code` always answers `202` |
+| Secrets in logs | E-mails masked (`j***@example.org`); passwords and refresh tokens never logged |
+| Transport | The backend speaks plain HTTP; TLS is provided by the reverse proxy |
+| CSRF | Disabled: the API uses bearer tokens in a header, not cookies, so cross-site requests cannot authenticate |
 
-## 9. Architecture decisions (summary)
+#### Threats and countermeasures
 
-| ID | Decision | Status |
+| Threat | Countermeasure | Remaining risk |
 |---|---|---|
-| ADR-1 | Spring Boot rewrite of the PHP backend, keeping the API contract | Accepted |
-| ADR-2 | Self-issued JWT plus DB-backed revocation instead of an external IdP (Keycloak) | Accepted; revisit if SSO is needed |
-| ADR-3 | Single-table inheritance for `Admin` / `User` | Accepted |
-| ADR-4 | Package by feature, layering enforced by ArchUnit | Accepted |
-| ADR-5 | Flyway owns the schema; Hibernate only validates | Accepted |
-| ADR-6 | In-memory rate limiting | Accepted for a single instance; Redis or a gateway is needed for scale-out |
-| ADR-7 | Desktops and desktop groups identified by `description` (V3/V4) | Accepted |
+| Password guessing for one account | Lockout after five failures; 20 logins per minute per IP | An attacker can keep a victim's account locked (R-5) |
+| Password guessing across many accounts | Per-IP rate limit; BCrypt makes each check slow | Distributed attacks from many addresses |
+| Finding out which e-mail addresses exist | Equal timing for unknown accounts; `resend_code` always `202` | Locked accounts and registration still reveal existence (R-3) |
+| Stolen access token | Short lifetime (1 hour); revocation on logout, disable, password change | Usable until one of these happens |
+| Stolen refresh token | Single use; rotation on every refresh | Plain-text storage in the database (R-1) |
+| Forged token | RS256 signature and issuer check | Loss of the private key file |
+| Privilege escalation | Scope fixed to the role; requested scopes checked; `@PreAuthorize` on every admin endpoint | – |
+| Faked client address | `X-Forwarded-For` trusted only from configured proxies | Wrong proxy configuration |
+| Information leakage in errors | Generic `500` body with a reference only | – |
+
+### 8.2 Error handling
+
+Services throw typed exceptions. Each one maps to exactly one HTTP status:
+
+| Base type | Status |
+|---|---|
+| `NoSuchElementException` | 404 |
+| `IllegalArgumentException` | 400 |
+| `ConflictException` | 409 |
+| `TokenGrantException`, `SessionException` | Status carried by the exception, with an OAuth2-style body |
+
+`GlobalExceptionHandler` turns every other exception into a `500` whose support reference is the
+request id. Stack traces and SQL details never leave the server.
+
+### 8.3 Observability
+
+- Every log line carries the request id (`[%X{requestId}]`). The id comes from the `X-Request-ID`
+  header, or a new UUID is generated. It is echoed in the response, so one user action can be
+  followed across frontend, DaaS application and backend.
+- `GET /actuator/health` reports the overall status without component details.
+
+### 8.4 Transactions and side effects
+
+- Business operations are `@Transactional` at service level.
+- The password grant uses `noRollbackFor = TokenGrantException`, so the failed-login counter is
+  saved although the request fails.
+- E-mails are sent only after the commit (`AfterCommit`), on a bounded executor (2–4 threads,
+  queue of 100). A slow SMTP server never holds database locks or blocks requests.
+
+### 8.5 Time and testability
+
+All time-dependent logic (token expiry, lockout, registration codes) uses an injected `Clock`, so
+tests can run with a fixed clock.
+
+### 8.6 Data protection
+
+| Personal data | Where | Retention |
+|---|---|---|
+| Name, e-mail address | `users` table; inside every access token | Until the account is deleted |
+| Password | `users.password` as a BCrypt hash only | Until changed or deleted |
+| Registration code | `users.registration_code` | Cleared after verification; replaced on resend |
+| Login history | Not stored. Only the failed-login counter and lock time | Reset on successful login |
+| Tokens | `access_tokens`, `refresh_tokens` (with user id) | Deleted daily after expiry, or with the account |
+| Logs | Masked e-mail addresses, user ids, request ids | Depends on the log storage of the host |
+
+- **Right to erasure:** `DELETE /user/{id}` removes the account and everything linked to it.
+- **Right of access:** there is no export endpoint; an admin can read the account with
+  `GET /user/{id}`.
+- **Minimisation:** the backend stores no addresses, phone numbers or login history.
+
+### 8.7 Configuration
+
+All settings come from `application.yml`, overridden by a profile file (`application-<profile>.yml`)
+and by environment variables. Secrets are passed only as environment variables. The full list is in
+the [README](../README.md#configuration). Typed settings (`app.*`) are bound to classes in
+`config.properties` and validated at startup, so a missing required value stops the application
+immediately.
+
+### 8.8 Testing
+
+| Level | Tool | Count (2026-11-13) |
+|---|---|---|
+| Unit tests | JUnit 5, Mockito, AssertJ | 253 in 33 classes |
+| Integration tests | Spring Boot test context, MockMvc, H2 | 96 in 12 classes |
+| Migration test | Testcontainers with MariaDB 11.4 | 1 (needs Docker) |
+| Architecture tests | ArchUnit | 19 rules |
+| End-to-end tests | Playwright, in the `design-daas-e2e` repository | Separate suite |
+
+The build fails if a test fails, an ArchUnit rule is broken, or line or branch coverage drops
+below 80 %. The last run reached 95.6 % line and 87.3 % branch coverage.
+
+### 8.9 Documentation
+
+The API description is generated from the code (springdoc). Every type and public method has
+Javadoc, and each module has a `package-info.java`. The conventions are in the
+[Developer guide](development.md#code-documentation).
+
+## 9. Architecture decisions
+
+| Id | Decision | Rationale | Consequences |
+|---|---|---|---|
+| ADR-1 | Rewrite in Spring Boot, keeping the used API contract | Tender requirement; existing clients must keep working | Some unused PHP endpoints were dropped |
+| ADR-2 | Self-issued JWTs instead of Spring Authorization Server or an external IdP | Only the password and refresh grants are needed; no extra service to operate | No SSO and no public key endpoint (JWKS): other services check tokens through `GET /oauth2/user/session`. Revisit if federated login is required |
+| ADR-3 | Store every access token's `jti` and check it on each request | Logout and disabling must take effect immediately (NFA-6) | Two database reads per authenticated request |
+| ADR-4 | Opaque, single-use refresh tokens with a row lock | Limits the damage of a stolen refresh token; prevents double redemption | One database write per refresh |
+| ADR-5 | Package by feature with layering checked by ArchUnit | Architecture enforced by the build (NFA-8) | Rules must be kept in step with the package structure |
+| ADR-6 | Flyway owns the schema; Hibernate only validates | Reproducible schema in every environment | Every schema change needs a migration |
+| ADR-7 | Single-table inheritance for `Admin` and `User` | One e-mail namespace and one login path for both roles | A new role needs a new subclass and authority |
+| ADR-8 | Resolve conflicts within a cascade step by "deny wins" | The PHP backend's result depended on random group order | Deterministic and fail-closed (NFA-1) |
+| ADR-9 | Admins bypass the permission cascade | An empty rule table would otherwise lock admins out of the DaaS application | Single-user rules for admin accounts are rejected, because they would never be evaluated |
+| ADR-10 | Permission data is maintained through the API; uniqueness enforced by V5 | Administrators need no database access | Duplicate rules are rejected with `409` |
+| ADR-11 | In-memory rate limiting | Simple and sufficient for one instance | Limits are per instance; a gateway or Redis is needed for strict limits across replicas |
 
 ## 10. Quality requirements
 
-| Scenario | Expected response |
-|---|---|
-| An admin disables a user who is logged in | The user's next request returns `401` immediately |
-| An attacker tries passwords for one account | Locked after 5 attempts for 15 min; IP limited to 20 req/min |
-| A refresh token is used twice | The second use gets `401 invalid_grant` |
-| An unexpected exception occurs | `500` with a correlation ID only; details stay in the log |
-| A new contributor adds a service in the wrong package | ArchUnit test fails the build |
-| A schema change is made without a migration | Startup fails (`ddl-auto: validate`) |
+### 10.1 Quality tree
+
+```mermaid
+flowchart LR
+    q[Quality] --> c[Correctness]
+    q --> s[Security]
+    q --> m[Maintainability]
+    q --> o[Operability]
+    c --> c1[Fail-closed cascade<br/>NFA-1, NFA-2]
+    c --> c2[API compatibility<br/>NFA-3]
+    s --> s1[Hashing, lockout<br/>NFA-4]
+    s --> s2[Rate limiting<br/>NFA-5]
+    s --> s3[Revocation<br/>NFA-6]
+    m --> m1[Enforced layering<br/>NFA-8]
+    m --> m2[Coverage gate<br/>NFA-9]
+    m --> m3[Documentation<br/>NFA-10]
+    o --> o1[Stateless<br/>NFA-7]
+    o --> o2[Simple installation<br/>NFA-11]
+```
+
+### 10.2 Quality scenarios
+
+A quality scenario describes a concrete situation and the reaction the system must show. The
+results are from the test run of 2026-11-13 (`mvn verify`: 369 tests, 0 failures, 1 skipped).
+
+| Id | Scenario | Expected response | Requirement | Verified by | Result |
+|---|---|---|---|---|---|
+| QS-1 | The DaaS application checks a function for a user without matching rules | `deny` | NFA-1 | `PermissionServiceTest`, `PermissionControllerIntegrationTest` | ✅ Pass |
+| QS-2 | A user is in two groups with an allow and a deny rule for the same function | `deny` | NFA-2, ADR-8 | `PermissionServiceTest` | ✅ Pass |
+| QS-3 | An admin disables a user who is logged in | The user's next request returns `401` | NFA-6 | `AuthHardeningIntegrationTest` | ✅ Pass |
+| QS-4 | An attacker tries passwords for one account | Locked after five attempts for 15 minutes | NFA-4 | `AccountLockoutServiceTest`, `AuthHardeningIntegrationTest` | ✅ Pass |
+| QS-5 | A client sends more than 20 login requests per minute from one IP | `429` with `Retry-After` | NFA-5 | `RateLimitingFilterTest`, `TokenBucketTest` | ✅ Pass |
+| QS-6 | A refresh token is used twice | The second use returns `401 invalid_grant` | FA-2 | `TokenControllerIntegrationTest` | ✅ Pass |
+| QS-7 | A contributor puts a service in the wrong package | `mvn verify` fails | NFA-8 | `ArchitectureTest` | ✅ Pass |
+| QS-8 | A change lowers line or branch coverage below 80 % | `mvn verify` fails | NFA-9 | JaCoCo `check` goal | ✅ Pass |
+| QS-9 | A migration does not match the entities | The MariaDB integration test fails | ADR-6 | `FlywayMariaDbIntegrationTest` | Not run: needs Docker, which was not available for this run |
+| QS-10 | An unexpected exception occurs | `500` with a support reference only | Security | `GlobalExceptionHandlerTest` | ✅ Pass |
 
 ## 11. Risks and technical debt
 
-Findings from the code review, most important first.
+Severity:  **High** (fix before production use) · **Medium** (fix soon) · **Low** (improve
+when the code is touched) · **Info** (worth knowing). Each entry was checked against the code on
+2026-11-13.
 
-| # | Severity | Finding | Location | Suggested fix |
+### 11.1 Open risks and technical debt
+
+| Id | Severity | Finding | Location | Suggested measure |
 |---|---|---|---|---|
-| 1 | ✅ Fixed | The bootstrap admin with the well-known password `Admin123!` was created in every profile. `prod` now disables it unless `ADMIN_INIT_ENABLED=true` | `application-prod.yml` | – (outside `prod` the default is still on, for convenience) |
-| 2 | ✅ Fixed | Timing-based user enumeration: the hard-coded dummy hash used BCrypt cost 10 while real hashes use 12. The dummy hash is now created at startup with the configured `PasswordEncoder` | `TokenService` | – |
-| 3 | 🟠 Medium | Other ways to find out whether an account exists: a locked account returns `429` **before** the password check; `POST /user` returns `400 Email already in use` | `TokenService`, `AccountValidator` | Accept the risk and document it, or return generic responses |
-| 4 | ✅ Fixed | Javadoc mentioned an `expert` role that does not exist. The mentions were removed; roles are only `admin` and `user`. A `users.role='expert'` row would still make Hibernate fail | `SessionInfoDto`, `ScopeResolver` | – (add an `Expert` subclass and authority if the role is needed) |
-| 5 | ✅ Fixed | `/actuator/health` required a token, so health probes got `401`. It is now public and shows only the overall status | `SecurityConfig` | – |
-| 6 | ✅ Fixed | `/version` was allowed without a token in `SecurityConfig` but had no controller (404). The unused rule was removed | `SecurityConfig` | – |
-| 7 | ✅ Fixed | The token endpoint accepted `application/json` but ignored the body (400). It now accepts only form data, so a JSON body gets a clear `415` | `TokenController` | – |
-| 8 | 🟠 Medium | Tests run on H2 with **Flyway disabled** (`create-drop`), so the real migrations are never tested and the schema can drift from the entities | `application-test.yml` | Testcontainers MariaDB plus Flyway in integration tests |
-| 9 | 🟠 Medium | `TokenBucket` resets its timestamp on every consume and stores only whole seconds, so partial refills are lost (steady traffic refills slower than configured). The `buckets` map is **never evicted** (memory grows with unique IPs) and the class comment is outdated | `shared/security/ratelimit` | Use Bucket4j or Caffeine with expiry, or store millisecond precision and keep the remainder |
-| 10 | 🟠 Medium | Refresh tokens are stored **in plaintext**. A DB leak gives working tokens, and there is no reuse detection that would revoke the whole token family | `TokenIssuer`, `RefreshTokenRepository` | Store SHA-256(token); on reuse of a revoked token, revoke all of that user's tokens |
-| 11 | 🟡 Low | DEBUG logging for `de.frauas.design.backend` in **all** profiles, including prod. With mail disabled, registration codes are logged at DEBUG | `application.yml`, `MailService` | INFO in `application-prod.yml` |
-| 12 | 🟡 Low | `EmailAlreadyInUseException` extends `IllegalArgumentException`, so it returns **400** instead of 409 | `user/exception` | Extend `ConflictException` |
-| 13 | 🟡 Low | Container runs as **root** and has no `HEALTHCHECK`; no Maven wrapper is committed | `Dockerfile`, `.gitignore` | `USER` directive; commit `mvnw` |
-| 14 | 🟡 Low | Two DB queries per authenticated request (`jti` and user) | `TokenRevocationValidator` | A short-lived cache, or one join query |
-| 15 | 🟡 Low | N+1 lazy loading in list endpoints (`DesktopGroupDto.from`, `UserDto.from`); no pagination | services and DTOs | `@EntityGraph` or fetch joins; `Pageable` |
-| 16 | 🟡 Low | No API for permission rules, deletes, or admin disable/update | – | Add admin CRUD endpoints |
-| 17 | 🟡 Low | `allowCredentials(true)` in CORS is not needed for bearer tokens | `CorsConfig` | Set it to false unless cookies are introduced |
-| 18 | ⚪ Info | OpenAPI says version `1.0.0`, `pom.xml` says `2.0.0` | `OpenApiConfig` | Read the version from build info |
-| 19 | ⚪ Info | `revoke()` on token entities uses `Instant.now()` instead of the injected `Clock` | `auth/model` | Pass in `Instant now` |
-| 20 | ⚪ Info | The `{isoCode}` path variable is validated but never used | `UserController.requestApplication` | Use it in the mail, or drop it (this breaks the API) |
-| 21 | ⚪ Info | `SessionService` repeats the checks of `TokenRevocationValidator` | `SessionService` | Keep it for clearer errors, or simplify |
-| 22 | ⚪ Info | MariaDB `TIMESTAMP` ends at 2038-01-19 (MariaDB 11.5+ extends it to 2106) | migrations | Plan a move to `DATETIME(6)` with UTC handling |
-| 23 | ⚪ Info | Two different classes are both called `UserNotFoundException` (`auth.exception` → 401, `user.exception` → 404), which is easy to mix up in imports | `auth/exception`, `user/exception` | Rename the auth one, e.g. `SessionUserNotFoundException` |
-| 24 | ⚪ Info | `AuthorizationServerConfig` does not configure an authorization server; it only sets up the JWT keys, encoder and decoder | `config` | Rename, e.g. `JwtConfig` |
+| R-1 | Medium | Refresh tokens are stored in plain text. A database leak exposes usable tokens, and reusing a revoked token does not revoke the rest of the user's tokens | `TokenIssuer`, `RefreshTokenRepository` | Store a SHA-256 hash; revoke all of a user's tokens when a revoked token is reused |
+| R-3 | Medium | Accounts can still be enumerated: a locked account answers `429` before the password check, and `POST /user` answers `400 Email already in use` | `TokenService`, `AccountValidator` | Accept and document, or return uniform responses |
+| R-4 | Low | The application package logs at `DEBUG` in every profile, including `prod`. With mail disabled, registration codes appear in the log | `application.yml` | Set `INFO` in `application-prod.yml` |
+| R-5 | Low | The account lockout is reset only by a successful login. One failure after the lock expires locks the account again, and admins cannot lift a lock | `AccountLockoutService` | Reset the counter when the lock expires; add an admin unlock |
+| R-6 | Low | `EmailAlreadyInUseException` extends `IllegalArgumentException` and therefore returns `400` instead of `409` | `user.exception` | Extend `ConflictException`. This changes the API contract |
+| R-7 | Low | The container runs as root and has no `HEALTHCHECK`. No Maven wrapper is committed (`.mvn/` is git-ignored) | `Dockerfile`, `.gitignore` | Add a `USER` and a `HEALTHCHECK`; commit `mvnw` |
+| R-10 | Low | `auth` ↔ `user` and `user` ↔ `desktop` depend on each other in both directions. ArchUnit checks layers but not cycles between modules | Module structure | Add a `slices().should().beFreeOfCycles()` rule; move `JwtUserResolver` usage behind an interface |
+| R-11 | Low | List endpoints are not paginated and load associations lazily (N+1 queries) | Services, DTO mappers | Fetch joins or `@EntityGraph`; `Pageable` |
+| R-12 | Low | Each authenticated request makes two database reads (token and account) | `TokenRevocationValidator` | A short-lived cache or a single join query |
+| R-13 | Low | `.env.example` uses `DB_PASSWORD=design_password`, while the defaults and the README use `design`. Its `MAIL_SMTP_AUTH` and `MAIL_SMTP_STARTTLS` are not read by the application | `.env.example`, `application.yml` | Align the values; remove the unused variables or wire them |
+| R-14 | Info | CORS allows credentials, which bearer tokens do not need | `CorsConfig` | Disable unless cookies are introduced |
+| R-15 | Info | The OpenAPI document reports version `1.0.0`; the build is `2.0.0` | `OpenApiConfig` | Read the version from build information |
+| R-16 | Info | Token entities use `Instant.now()` in `revoke()` instead of the injected `Clock` | `auth.model` | Pass the time in |
+| R-17 | Info | The `{isoCode}` path variable is validated but unused | `UserController` | Use it in the e-mail, or document it as reserved |
+| R-18 | Info | Two classes are named `UserNotFoundException` (`auth.exception` → 401, `user.exception` → 404) | Exceptions | Rename the `auth` one |
+| R-19 | Info | `AuthorizationServerConfig` configures JWT keys, not an authorization server | `config` | Rename to `JwtConfig` |
+| R-20 | Info | MariaDB `TIMESTAMP` ends on 2038-01-19 (MariaDB 11.5+ extends the range) | Migrations | Move to `DATETIME(6)` with UTC handling before it matters |
+| R-21 | Info | The repository has no licence file | Repository root | Agree on a licence with the university and add `LICENSE` |
+| R-22 | Low | An admin's own password cannot be changed through the API (`PATCH /user/{id}` only accepts regular users). The DESIGN installer works around this with a script that writes the hash into the database | `AdminController` | Add `PATCH /admin/{id}` or a "change my password" endpoint |
+| R-23 | Low | The backend does not evaluate `X-Forwarded-Prefix`. Behind nginx at `/auth/`, Swagger UI may therefore show server URLs without the prefix. Not verified | `application.yml` | Set `server.forward-headers-strategy: framework` and test Swagger behind the proxy |
+| R-24 | Info | The DaaS application caches permission answers for 30 seconds, so rule changes take up to 30 seconds to apply there | design-daas | Document for admins (done); shorten the cache if needed |
 
-**What is already done well:** clear module structure enforced by ArchUnit, thin controllers,
-thorough Javadoc, revocation on every request, refresh rotation with row locking, lockout counter
-saved despite rollback (`noRollbackFor`), mail sent only after commit, masked PII in logs, sealed
-`GrantRequest` with an exhaustive `switch`, an injected `Clock`, about 236 unit and integration
-tests, and error responses that never leak internals.
+### 11.2 Resolved
+
+| Former finding | Resolution | Status |
+|---|---|---|
+| Default admin with a well-known password created in production | Disabled in `prod` unless `ADMIN_INIT_ENABLED=true` | ✅ Fixed |
+| Dummy hash cheaper than real hashes (timing-based enumeration) | Dummy hash is created at startup with the configured encoder | ✅ Fixed |
+| Health endpoint required a token | `/actuator/health` is public and shows only the overall status | ✅ Fixed |
+| `/version` was public but had no handler | Rule removed; the health endpoint replaces it | ✅ Fixed |
+| Token endpoint accepted JSON but ignored it | Only form data is accepted; JSON returns `415` | ✅ Fixed |
+| Migrations were never tested against MariaDB | `FlywayMariaDbIntegrationTest` (Testcontainers) | ✅ Fixed |
+| Token bucket lost fractional refills; bucket map grew without bound | Fractions are kept; full buckets are evicted every five minutes | ✅ Fixed |
+| No API for deleting resources or maintaining permission rules | Delete endpoints and the permission management API | ✅ Fixed |
+| Duplicate rules possible | Unique constraints in V5 | ✅ Fixed |
+| The last-admin check could be bypassed by two concurrent deletions | The admin rows are locked (`SELECT … FOR UPDATE`) and counted from the locked result | ✅ Fixed |
+| The 500 support reference was a separate UUID, unrelated to the request's other log lines | The reference is now the request id | ✅ Fixed |
+| Rules for admin accounts were accepted although admins bypass the cascade | Single-user rules for admins are rejected with `400` | ✅ Fixed |
 
 ## 12. Glossary
 
-
-| Term | Meaning |
+| Term | Definition |
 |---|---|
-| **DaaS** | Desktop as a Service: virtual desktops delivered over the network |
-| **Desktop** | One virtual desktop or VM template offered to users |
-| **Desktop group** | A set of desktops that is granted as a whole |
-| **User group** | A set of regular users (for example a course) |
-| **Endpoint / function** | A named DESIGN DaaS operation (`function_name`) that permissions apply to |
-| **Endpoint group** | A bundle of endpoints |
-| **Access token** | A short-lived signed JWT sent as `Authorization: Bearer …` |
-| **Refresh token** | A long-lived random string, exchanged for a new token pair; single use |
-| **jti** | JWT ID, the unique token id used for revocation |
-| **Scope** | The permission level in the token; here always equal to the user's role (`admin` / `user`) |
-| **Revocation** | Making a token invalid before it expires (logout, disable, password change) |
-| **Lockout** | A temporary login block after repeated wrong passwords |
-| **Flyway** | Tool that applies versioned SQL migrations |
-| **arc42** | A template for documenting software architecture (this document) |
+| **Access token** | Short-lived signed JWT sent as `Authorization: Bearer …` |
+| **Admin** | Account with the `admin` role; manages the platform and always passes the permission check |
+| **Cascade** | The four-step permission check, from user-endpoint rules to group-endpoint-group rules |
+| **DaaS** | Desktop as a Service: desktops delivered over the network |
+| **DaaS application (design-daas)** | The DESIGN component that runs desktops and calls the permission check |
+| **Desktop group** | A set of desktops that is granted to user groups as a whole |
+| **Endpoint** | A DaaS-application function, identified by its function name, that rules can target |
+| **Endpoint group** | A named bundle of endpoints |
+| **Fail-closed** | Any doubt (unknown user, unknown function, no rule) results in deny |
+| **jti** | JWT ID: the unique token id used for revocation |
+| **Lockout** | Temporary login block after five consecutive failed attempts |
+| **Refresh token** | Long-lived random value, exchanged once for a new token pair |
+| **Request id** | Value of `X-Request-ID`, written into every log line of a request |
+| **Revocation** | Making a token invalid before it expires |
+| **Rule** | An allow or deny decision for one subject (user or user group) and one target (endpoint or endpoint group) |
+| **Scope** | The permission level in the token; always equal to the account's role |
+| **User group** | A set of regular users, for example a course |
