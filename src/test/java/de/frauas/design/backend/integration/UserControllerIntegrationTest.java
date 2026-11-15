@@ -2,6 +2,8 @@ package de.frauas.design.backend.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.frauas.design.backend.user.model.User;
+import de.frauas.design.backend.user.model.UserGroup;
+import de.frauas.design.backend.user.repository.UserGroupRepository;
 import de.frauas.design.backend.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -12,10 +14,12 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 
+import java.util.List;
 import java.util.Map;
 
 import static de.frauas.design.backend.integration.MockJwt.adminJwt;
 import static de.frauas.design.backend.integration.MockJwt.userJwt;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -33,15 +37,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class UserControllerIntegrationTest extends BaseIntegrationTest {
 
     private static final String TEST_EMAIL = "ctrl.user@example.com";
+    private static final String SELF_ASSIGN_EMAIL = "self-assign@example.com";
+    private static final String ADMIN_ASSIGN_EMAIL = "admin-assign@example.com";
     // Spring Boot 4.x removed JacksonAutoConfiguration — ObjectMapper is no longer a Spring bean.
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired
     UserRepository userRepository;
 
+    @Autowired
+    UserGroupRepository userGroupRepository;
+
     @BeforeAll
     void cleanup() {
         userRepository.findByEmail(TEST_EMAIL).ifPresent(userRepository::delete);
+        userRepository.findByEmail(SELF_ASSIGN_EMAIL).ifPresent(userRepository::delete);
+        userRepository.findByEmail(ADMIN_ASSIGN_EMAIL).ifPresent(userRepository::delete);
     }
 
     // -------------------------------------------------------------------------
@@ -101,8 +112,80 @@ class UserControllerIntegrationTest extends BaseIntegrationTest {
                 "password", "Password1",
                 "groups", new int[] {999999}));
 
-        mockMvc.perform(post("/user").contentType(MediaType.APPLICATION_JSON).content(body))
+        mockMvc.perform(post("/user")
+                        .with(adminJwt(1))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @Order(4)
+    @DisplayName("POST /user – anonymous self-registration with groups returns 403 and creates no account")
+    void createUser_anonymousWithGroups_returns403() throws Exception {
+        UserGroup group = savedGroup("self-assign-anon");
+        String body = objectMapper.writeValueAsString(Map.of(
+                "name", "Intruder",
+                "email", SELF_ASSIGN_EMAIL,
+                "password", "Password1",
+                "groups", new int[] {group.getId()}));
+
+        mockMvc.perform(post("/user").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+
+        assertTrue(userRepository.findByEmail(SELF_ASSIGN_EMAIL).isEmpty());
+    }
+
+    @Test
+    @Order(4)
+    @DisplayName("POST /user – user-scoped caller with groups returns 403")
+    void createUser_userScopeWithGroups_returns403() throws Exception {
+        UserGroup group = savedGroup("self-assign-user");
+        String body = objectMapper.writeValueAsString(Map.of(
+                "name", "Intruder",
+                "email", SELF_ASSIGN_EMAIL,
+                "password", "Password1",
+                "groups", new int[] {group.getId()}));
+
+        mockMvc.perform(post("/user")
+                        .with(userJwt(2))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isForbidden());
+
+        assertTrue(userRepository.findByEmail(SELF_ASSIGN_EMAIL).isEmpty());
+    }
+
+    @Test
+    @Order(4)
+    @DisplayName("POST /user – admin caller may assign groups on creation")
+    void createUser_adminWithGroups_assignsGroups() throws Exception {
+        UserGroup group = savedGroup("admin-assign");
+        String body = objectMapper.writeValueAsString(Map.of(
+                "name", "Grouped User",
+                "email", ADMIN_ASSIGN_EMAIL,
+                "password", "Password1",
+                "groups", new int[] {group.getId()}));
+
+        mockMvc.perform(post("/user")
+                        .with(adminJwt(1))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated());
+
+        Integer id = userRepository.findByEmail(ADMIN_ASSIGN_EMAIL).orElseThrow().getId();
+        assertEquals(List.of(group.getId()), userRepository.findGroupIdsByUserId(id));
+    }
+
+    private UserGroup savedGroup(String name) {
+        return userGroupRepository.findAll().stream()
+                .filter(g -> name.equals(g.getName()))
+                .findFirst()
+                .orElseGet(() -> {
+                    UserGroup group = new UserGroup();
+                    group.setName(name);
+                    return userGroupRepository.save(group);
+                });
     }
 
     @Test

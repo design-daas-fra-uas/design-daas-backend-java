@@ -15,7 +15,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -44,12 +46,24 @@ public class UserController {
      * Registers a new (unverified) user. The account remains disabled until
      * {@link #validateEmail} succeeds.
      *
+     * <p>The endpoint is public for self-registration, but only an admin may assign
+     * user groups on creation. Otherwise an anonymous caller could put itself into any
+     * group and inherit its permissions and desktops.</p>
+     *
      * @param request the new user's details
-     * @return 201 Created with no body
+     * @param authentication the caller's authentication, {@code null} or anonymous for self-registration
+     * @return 201 Created with no body, 403 Forbidden if a non-admin caller sends {@code groups}
      */
     @PostMapping("/user")
-    public ResponseEntity<Void> createUser(@Valid @RequestBody CreateUserRequest request) {
+    public ResponseEntity<Void> createUser(
+            @Valid @RequestBody CreateUserRequest request, Authentication authentication) {
         log.info("POST /user — registering new user email={}", LogMasking.maskEmail(request.getEmail()));
+        if (request.getGroups() != null && !request.getGroups().isEmpty() && !isAdmin(authentication)) {
+            log.warn(
+                    "POST /user — rejected group assignment by non-admin caller email={}",
+                    LogMasking.maskEmail(request.getEmail()));
+            throw new AccessDeniedException("Only admins may assign user groups");
+        }
         UserDto result = userService.createUser(request);
         log.info("POST /user — user created id={} email={}", result.getId(), LogMasking.maskEmail(result.getEmail()));
         return ResponseEntity.status(HttpStatus.CREATED).build();
@@ -208,5 +222,11 @@ public class UserController {
                 userId,
                 application);
         return ResponseEntity.ok().build();
+    }
+
+    private static boolean isAdmin(Authentication authentication) {
+        return authentication != null
+                && authentication.getAuthorities().stream()
+                        .anyMatch(a -> Authorities.SCOPE_ADMIN.equals(a.getAuthority()));
     }
 }
