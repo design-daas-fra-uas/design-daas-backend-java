@@ -94,17 +94,7 @@ public class PermissionService {
             log.info("checkPermission — userId={} is an admin, allowing fn={}", userId, functionName);
             return PermissionResultDto.allow(userId, userName);
         }
-        Supplier<List<Integer>> groupIdsSupplier = new Supplier<>() {
-            private List<Integer> cachedGroupIds;
-
-            @Override
-            public List<Integer> get() {
-                if (cachedGroupIds == null) {
-                    cachedGroupIds = userRepository.findGroupIdsByUserId(userId);
-                }
-                return cachedGroupIds;
-            }
-        };
+        Supplier<List<Integer>> groupIdsSupplier = cachedGroupIds(userId);
 
         Optional<Boolean> allow = checkDirectUserRule(userId, functionName)
                 .or(() -> checkUserGroupRule(groupIdsSupplier.get(), functionName))
@@ -122,6 +112,24 @@ public class PermissionService {
 
     private static boolean isInvalidInput(Integer userId, String functionName) {
         return userId == null || functionName == null || functionName.isBlank();
+    }
+
+    /**
+     * Returns a supplier that loads the user's group ids on first use and caches them, so
+     * steps 2 and 4 share one query and steps 1 and 3 can decide without any.
+     */
+    private Supplier<List<Integer>> cachedGroupIds(Integer userId) {
+        return new Supplier<>() {
+            private List<Integer> groupIds;
+
+            @Override
+            public List<Integer> get() {
+                if (groupIds == null) {
+                    groupIds = userRepository.findGroupIdsByUserId(userId);
+                }
+                return groupIds;
+            }
+        };
     }
 
     /** Step 1: direct user → endpoint rule. */
