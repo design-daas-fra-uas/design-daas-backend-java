@@ -114,29 +114,7 @@ public class TokenService {
             throw new InvalidRequestException("username and password are required");
         }
 
-        var userOpt = userRepository.findByEmail(username);
-        if (userOpt.isEmpty()) {
-            // always run BCrypt to prevent timing-based user enumeration
-            passwordEncoder.matches(password, dummyHash());
-            log.warn("passwordGrant — unknown user={}", LogMasking.maskEmail(username));
-            throw new InvalidCredentialsException();
-        }
-
-        BaseUser user = userOpt.get();
-
-        // reject while the account is locked
-        accountLockoutService.assertNotLocked(user);
-
-        if (!passwordEncoder.matches(password, user.getPassword())) {
-            accountLockoutService.recordFailedAttempt(user);
-            log.warn("passwordGrant — wrong password user={}", LogMasking.maskEmail(username));
-            throw new InvalidCredentialsException();
-        }
-
-        if (!user.isEnabled()) {
-            log.warn("passwordGrant — disabled account user={}", LogMasking.maskEmail(username));
-            throw new AccountDisabledException();
-        }
+        BaseUser user = authenticate(username, password);
 
         // Successful authentication — reset any lockout state
         accountLockoutService.resetOnSuccess(user);
