@@ -73,36 +73,39 @@ public class DesktopService {
     @Transactional
     public void createDesktop(DesktopCreateRequest request) {
         log.debug("createDesktop(DesktopCreateRequest) — description={}", request.getDescription());
-
-        Set<String> subGroupDescriptions = new HashSet<>();
-        if (request.getGroups() != null) {
-            for (DesktopCreateRequest.SubGroupRequest sgReq : request.getGroups()) {
-                String description = sgReq.getDescription();
-                if (!subGroupDescriptions.add(description) || desktopGroupRepository.existsByDescription(description)) {
-                    throw new DesktopGroupAlreadyExistsException(description);
-                }
-            }
-        }
+        List<DesktopCreateRequest.SubGroupRequest> subGroups =
+                request.getGroups() != null ? request.getGroups() : List.of();
+        assertSubGroupDescriptionsAvailable(subGroups);
 
         Desktop desktop = new Desktop();
         desktop.setDescription(request.getDescription());
         Desktop savedDesktop = desktopRepository.save(desktop);
-        if (request.getGroups() != null) {
-            for (DesktopCreateRequest.SubGroupRequest sgReq : request.getGroups()) {
-                DesktopGroup g = new DesktopGroup();
-                g.setDescription(sgReq.getDescription());
-                linkDesktopAndGroup(savedDesktop, g);
-                desktopGroupRepository.save(g);
-                log.debug(
-                        "createDesktop — created sub-group description={} for desktopId={}",
-                        g.getDescription(),
-                        savedDesktop.getId());
+        for (DesktopCreateRequest.SubGroupRequest sgReq : subGroups) {
+            DesktopGroup g = new DesktopGroup();
+            g.setDescription(sgReq.getDescription());
+            linkDesktopAndGroup(savedDesktop, g);
+            desktopGroupRepository.save(g);
+            log.debug(
+                    "createDesktop — created sub-group description={} for desktopId={}",
+                    g.getDescription(),
+                    savedDesktop.getId());
+        }
+        log.info("createDesktop — desktop created id={} groups={}", savedDesktop.getId(), subGroups.size());
+    }
+
+    /**
+     * Rejects the request if two subgroups share a description or a description is already taken.
+     *
+     * @throws DesktopGroupAlreadyExistsException naming the first conflicting description
+     */
+    private void assertSubGroupDescriptionsAvailable(List<DesktopCreateRequest.SubGroupRequest> subGroups) {
+        Set<String> seen = new HashSet<>();
+        for (DesktopCreateRequest.SubGroupRequest sgReq : subGroups) {
+            String description = sgReq.getDescription();
+            if (!seen.add(description) || desktopGroupRepository.existsByDescription(description)) {
+                throw new DesktopGroupAlreadyExistsException(description);
             }
         }
-        log.info(
-                "createDesktop — desktop created id={} groups={}",
-                savedDesktop.getId(),
-                request.getGroups() != null ? request.getGroups().size() : 0);
     }
 
     /**

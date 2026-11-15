@@ -35,6 +35,7 @@ import de.frauas.design.backend.user.repository.UserGroupRepository;
 import de.frauas.design.backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -284,23 +285,23 @@ public class PermissionManagementService {
     @Transactional
     public void deleteRule(PermissionRuleKind kind, Integer id) {
         log.debug("deleteRule — kind={} id={}", kind, id);
-        boolean exists = switch (kind) {
-            case USER_ENDPOINT -> endpointUserAccessRepo.existsById(id);
-            case USER_GROUP_ENDPOINT -> endpointUserGroupAccessRepo.existsById(id);
-            case USER_ENDPOINT_GROUP -> endpointGroupUserAccessRepo.existsById(id);
-            case USER_GROUP_ENDPOINT_GROUP -> endpointGroupUserGroupAccessRepo.existsById(id);
-        };
-        if (!exists) {
+        JpaRepository<?, Integer> repository = ruleRepository(kind);
+        if (!repository.existsById(id)) {
             log.warn("deleteRule — kind={} id={} not found", kind, id);
             throw new PermissionRuleNotFoundException(kind, id);
         }
-        switch (kind) {
-            case USER_ENDPOINT -> endpointUserAccessRepo.deleteById(id);
-            case USER_GROUP_ENDPOINT -> endpointUserGroupAccessRepo.deleteById(id);
-            case USER_ENDPOINT_GROUP -> endpointGroupUserAccessRepo.deleteById(id);
-            case USER_GROUP_ENDPOINT_GROUP -> endpointGroupUserGroupAccessRepo.deleteById(id);
-        }
+        repository.deleteById(id);
         log.info("deleteRule — deleted kind={} id={}", kind, id);
+    }
+
+    /** Returns the repository that stores rules of the given kind. */
+    private JpaRepository<?, Integer> ruleRepository(PermissionRuleKind kind) {
+        return switch (kind) {
+            case USER_ENDPOINT -> endpointUserAccessRepo;
+            case USER_GROUP_ENDPOINT -> endpointUserGroupAccessRepo;
+            case USER_ENDPOINT_GROUP -> endpointGroupUserAccessRepo;
+            case USER_GROUP_ENDPOINT_GROUP -> endpointGroupUserGroupAccessRepo;
+        };
     }
 
     // -------------------------------------------------------------------------
