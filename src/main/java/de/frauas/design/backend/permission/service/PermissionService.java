@@ -73,7 +73,7 @@ public class PermissionService {
     public PermissionResultDto checkPermission(Integer userId, String functionName) {
         log.debug("checkPermission — userId={} functionName={}", userId, functionName);
 
-        if (userId == null || functionName == null || functionName.isBlank()) {
+        if (isInvalidInput(userId, functionName)) {
             log.warn(
                     "checkPermission — invalid input (userId={}, functionName={}), defaulting to deny",
                     userId,
@@ -118,6 +118,10 @@ public class PermissionService {
 
         log.info("checkPermission — userId={} fn={} result={}", userId, functionName, allow.get() ? "allow" : "deny");
         return toResult(allow.get(), userId, userName);
+    }
+
+    private static boolean isInvalidInput(Integer userId, String functionName) {
+        return userId == null || functionName == null || functionName.isBlank();
     }
 
     /** Step 1: direct user → endpoint rule. */
