@@ -28,7 +28,7 @@ interface that the frontend and the DaaS application already use, so both keep w
 |---|---|
 | Version | 2.0.0 — see [CHANGELOG](CHANGELOG.md) |
 | Runtime | Java 21, Spring Boot 4.1 (Spring Framework 7, Spring Security 7) |
-| Database | MariaDB, schema managed by Flyway |
+| Database | PostgreSQL, schema managed by Flyway |
 | API description | OpenAPI 3 with Swagger UI (springdoc) |
 | Quality gates | 19 ArchUnit rules and at least 80 % line and branch coverage, enforced by `mvn verify` |
 
@@ -51,13 +51,12 @@ available at <http://localhost:8080/swagger-ui.html>.
 Requires JDK 21, Maven 3.9+ and Docker.
 
 ```bash
-# 1. Start MariaDB
-docker run -d --name design-db -p 3306:3306 \
-  -e MARIADB_DATABASE=design_backend \
-  -e MARIADB_USER=design \
-  -e MARIADB_PASSWORD=design \
-  -e MARIADB_ROOT_PASSWORD=root \
-  mariadb:11
+# 1. Start PostgreSQL
+docker run -d --name design-db -p 5432:5432 \
+  -e POSTGRES_DB=design_backend \
+  -e POSTGRES_USER=design \
+  -e POSTGRES_PASSWORD=design \
+  postgres:18
 
 # 2. Start the backend (profile "local")
 mvn spring-boot:run
@@ -84,8 +83,8 @@ curl -X POST http://localhost:8080/oauth2/user/token \
 |---|---|---|
 | JDK | 21 | Temurin recommended |
 | Maven | 3.9 or later | No Maven wrapper is included |
-| MariaDB | 10.6 or later | Tested with 11.x |
-| Docker | Current | Optional: local MariaDB, container build, migration test |
+| PostgreSQL | 15 or later | Tested with 18 |
+| Docker | Current | Optional: local PostgreSQL, container build, migration test |
 | SMTP account | – | Optional; required for registration e-mails (`MAIL_ENABLED=true`) |
 
 ### Run from source
@@ -93,9 +92,8 @@ curl -X POST http://localhost:8080/oauth2/user/token \
 1. **Create the database and user** (not needed if you used the Docker command above):
 
    ```sql
-   CREATE DATABASE design_backend CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-   CREATE USER 'design'@'%' IDENTIFIED BY 'design';
-   GRANT ALL PRIVILEGES ON design_backend.* TO 'design'@'%';
+   CREATE ROLE design LOGIN PASSWORD 'design';
+   CREATE DATABASE design_backend OWNER design;
    ```
 
 2. **Configure the environment** (optional; the defaults match step 1). Spring Boot does not read
@@ -106,7 +104,7 @@ curl -X POST http://localhost:8080/oauth2/user/token \
    set -a; source .env; set +a
    ```
 
-3. **Build and test.** Unit and integration tests use an in-memory H2 database. The MariaDB
+3. **Build and test.** Unit and integration tests use an in-memory H2 database. The PostgreSQL
    migration test runs only when Docker is available.
 
    ```bash
@@ -121,7 +119,7 @@ curl -X POST http://localhost:8080/oauth2/user/token \
 
 On startup the service:
 
-- applies the Flyway migrations V1–V5,
+- applies the Flyway migrations,
 - creates the JWT signing key `rsa-jwk.json` in `OAUTH_KEYS_DIR` if it does not exist yet, and
 - creates the default admin, if enabled and the e-mail address is not taken.
 
@@ -132,7 +130,7 @@ docker build -t design-daas-backend:2.0.0 .
 
 docker run -d --name design-backend -p 8080:8080 \
   -e SPRING_PROFILES_ACTIVE=prod \
-  -e DB_URL=jdbc:mariadb://<db-host>:3306/design_backend \
+  -e DB_URL=jdbc:postgresql://<db-host>:5432/design_backend \
   -e DB_USERNAME=design -e DB_PASSWORD='<db-password>' \
   -e OAUTH_ISSUER=https://api.example.org \
   -e FRONTEND_URL=https://app.example.org \
@@ -153,20 +151,19 @@ Remove `ADMIN_INIT_ENABLED` after the first start.
 ```yaml
 services:
   db:
-    image: mariadb:11
+    image: postgres:18
     environment:
-      MARIADB_DATABASE: design_backend
-      MARIADB_USER: design
-      MARIADB_PASSWORD: design
-      MARIADB_ROOT_PASSWORD: root
-    ports: ["3306:3306"]
-    volumes: [db-data:/var/lib/mysql]
+      POSTGRES_DB: design_backend
+      POSTGRES_USER: design
+      POSTGRES_PASSWORD: design
+    ports: ["5432:5432"]
+    volumes: [db-data:/var/lib/postgresql]
   backend:
     build: .
     depends_on: [db]
     ports: ["8080:8080"]
     environment:
-      DB_URL: jdbc:mariadb://db:3306/design_backend
+      DB_URL: jdbc:postgresql://db:5432/design_backend
       DB_USERNAME: design
       DB_PASSWORD: design
       SPRING_PROFILES_ACTIVE: dev
@@ -186,7 +183,7 @@ variables.
 | Variable | Default | Description |
 |---|---|---|
 | `SPRING_PROFILES_ACTIVE` | `local` | `local`, `dev` or `prod` |
-| `DB_URL` | `jdbc:mariadb://localhost:3306/design_backend` | JDBC URL |
+| `DB_URL` | `jdbc:postgresql://localhost:5432/design_backend` | JDBC URL |
 | `DB_USERNAME`, `DB_PASSWORD` | `design`, `design` | Database credentials |
 | `OAUTH_ISSUER` | `http://localhost:8080` | `iss` claim of issued tokens; checked on every request |
 | `OAUTH_KEYS_DIR` | `./keys` | Directory of the signing key `rsa-jwk.json` |

@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
  * allow/deny rule (see {@link PermissionRuleKind}).
  *
  * <p>Deleting an endpoint or endpoint group first deletes the rules and group memberships
- * that point to it, so the result is the same on MariaDB (which would cascade anyway) and on
+ * that point to it, so the result is the same on PostgreSQL (which would cascade anyway) and on
  * the H2 test database (which has no cascading foreign keys).</p>
  */
 @Slf4j

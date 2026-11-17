@@ -14,10 +14,10 @@ spring:
     default: local
 
   datasource:
-    url: ${DB_URL:jdbc:mariadb://localhost:3306/design_backend}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/design_backend}
     username: ${DB_USERNAME:design}
     password: ${DB_PASSWORD:design}
-    driver-class-name: org.mariadb.jdbc.Driver
+    driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
@@ -26,7 +26,7 @@ spring:
     open-in-view: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MariaDBDialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
 
   flyway:
     enabled: true

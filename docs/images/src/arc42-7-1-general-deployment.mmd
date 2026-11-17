@@ -8,7 +8,7 @@ flowchart LR
     subgraph host [Application host]
         backend[backend container<br/>port 8080]
         keys[(volume /app/keys<br/>signing key)]
-        db[(MariaDB)]
+        db[(PostgreSQL)]
         daas[DaaS application]
     end
     smtp[SMTP server]

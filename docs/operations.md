@@ -36,7 +36,7 @@ there. Run the commands from `installer/` as root:
 
 | Command | What it does |
 |---|---|
-| `make auth-install` | Builds the image from this repository, starts it with its own MariaDB, waits until it answers and tests the admin login |
+| `make auth-install` | Builds the image from this repository, creates its database in the stack's PostgreSQL (`daas-0-postgres`), starts it, waits until it answers and tests the admin login |
 | `make auth-check` | Tests the running service without changing anything: containers, admin login directly and through nginx, volumes, network isolation |
 | `make auth-backup` | Saves the database and the signing key to `installer/auth/backups/` |
 | `make auth-admin-password` | Sets the admin password to `ADMIN_PASSWORD` from `daas.env` and revokes the admin's tokens |
@@ -115,7 +115,7 @@ follow one user action across all DESIGN components, search for this id.
 
 | Data | Back up? | Notes |
 |---|---|---|
-| MariaDB schema `design_backend` | **Yes**, regularly (for example with `mariadb-dump --single-transaction`) | Accounts, groups, desktops, permission rules |
+| PostgreSQL database `design_backend` | **Yes**, regularly (for example with `pg_dump --create`, or `make auth-backup` in the installer) | Accounts, groups, desktops, permission rules |
 | `rsa-jwk.json` | **Yes** | Without it, all issued tokens stop working (users must log in again; no data is lost) |
 | `access_tokens`, `refresh_tokens` | Optional | Losing them only ends existing sessions |
 
@@ -130,12 +130,8 @@ the schema version and applies only newer migrations.
    service does not start, and the previous image can be started again against the restored
    backup.
 
-Migration-specific notes:
-
-| Migration | Before upgrading |
-|---|---|
-| V4 | `desktop_groups.description` must be unique and not null, or the migration fails |
-| V5 | Duplicate permission rules are deleted automatically (deny is kept before allow, otherwise the oldest row). Export the rule tables first if you need a record |
+There are no migration-specific notes yet: `V1` creates the whole schema. On PostgreSQL a
+failed migration is rolled back completely, so the schema is never left half changed.
 
 ## Scaling
 

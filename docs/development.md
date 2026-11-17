@@ -30,7 +30,7 @@
 |---|---|---|
 | JDK | 21 (Temurin recommended) | Build and run |
 | Maven | 3.9 or later | Build; no Maven wrapper is committed |
-| Docker | Any current version | Local MariaDB; the MariaDB migration test (skipped without Docker) |
+| Docker | Any current version | Local PostgreSQL; the PostgreSQL migration test (skipped without Docker) |
 | IDE | Any, with Lombok support | IntelliJ IDEA: enable annotation processing |
 
 ## Project layout
@@ -48,12 +48,12 @@ src/main/java/de/frauas/design/backend/
 
 src/main/resources/
 ├── application.yml, application-{local,dev,prod}.yml
-├── db/migration/    Flyway scripts V1–V5
+├── db/migration/    Flyway scripts (V1: the whole schema)
 └── templates/mail/  Thymeleaf e-mail templates
 
 src/test/java/de/frauas/design/backend/
 ├── arch/            ArchitectureTest (19 ArchUnit rules)
-├── integration/     MockMvc tests against H2, and FlywayMariaDbIntegrationTest (Testcontainers)
+├── integration/     MockMvc tests against H2, and FlywayPostgresIntegrationTest (Testcontainers)
 └── <module>/        unit tests per module (JUnit 5, Mockito, AssertJ)
 ```
 
@@ -70,7 +70,7 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev   # run with another profile
 mvn package -DskipTests                              # build the jar only
 ```
 
-The application needs a MariaDB instance; see [Quick start](../README.md#quick-start).
+The application needs a PostgreSQL instance; see [Quick start](../README.md#quick-start).
 
 ## Testing
 
@@ -83,8 +83,8 @@ mvn verify                                 # everything, plus the JaCoCo report
 | Test type | Scope | Database | Count (2026-11-13) |
 |---|---|---|---|
 | Unit tests | One class, dependencies mocked with Mockito | None | 253 in 33 classes |
-| Integration tests | Full Spring context and security chain via MockMvc (`BaseIntegrationTest`) | H2 in MySQL mode, schema generated from the entities | 96 in 12 classes |
-| Migration test | `FlywayMariaDbIntegrationTest` runs all Flyway migrations on MariaDB 11.4 and validates the entities | MariaDB in Testcontainers; **skipped without Docker** | 1 |
+| Integration tests | Full Spring context and security chain via MockMvc (`BaseIntegrationTest`) | H2 in PostgreSQL mode, schema generated from the entities | 96 in 12 classes |
+| Migration test | `FlywayPostgresIntegrationTest` runs all Flyway migrations on PostgreSQL 18 and validates the entities | PostgreSQL in Testcontainers; **skipped without Docker** | 1 |
 | Architecture test | `ArchitectureTest` checks layering, naming and dependency rules | None | 19 rules |
 
 Notes:
@@ -99,7 +99,7 @@ Notes:
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs `mvn -B verify` on Java 21 for every push to `master` and every
-pull request. The runner has Docker, so the MariaDB migration test runs there. The JaCoCo report
+pull request. The runner has Docker, so the PostgreSQL migration test runs there. The JaCoCo report
 is uploaded as the build artifact `jacoco`.
 
 ## Coding conventions
@@ -185,7 +185,7 @@ mvn javadoc:javadoc
 | Follow one request | Send `X-Request-ID: my-test-1` and search the log for `[my-test-1]` |
 | Read registration codes without SMTP | Keep `MAIL_ENABLED=false`; the code is logged at `DEBUG` by `MailService` |
 | Try endpoints | Swagger UI at `/swagger-ui.html` in the `local` profile. Log in with `POST /oauth2/user/token`, then use **Authorize** with the access token |
-| Start with an empty database | `docker rm -f design-db` and start MariaDB again; Flyway recreates the schema |
+| Start with an empty database | `docker rm -f design-db` and start PostgreSQL again; Flyway recreates the schema |
 | Inspect a token | Decode the middle part of the JWT (Base64url); never paste real tokens into online tools |
 
 ## Workflow and releases

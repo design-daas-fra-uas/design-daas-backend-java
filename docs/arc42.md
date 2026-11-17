@@ -17,7 +17,7 @@ non-functional requirements) refer to chapter 3 of the accompanying master's the
   into the same layers. The build checks this structure automatically.
 - **How it stays secure:** hashed passwords, signed tokens that can be cancelled at any time,
   account lockout, request limits, and a permission check that denies whenever in doubt.
-- **How it runs:** a single container with a MariaDB database, configured through environment
+- **How it runs:** a single container with a PostgreSQL database, configured through environment
   variables.
 
 ## How to read this document
@@ -94,7 +94,7 @@ The DaaS application (design-daas) uses it to ask whether a user may call one of
 
 | Category | Constraint | Background |
 |---|---|---|
-| Technical | Java 21, Spring Boot 4.1, MariaDB | Specified by the project; MariaDB is used by the other DESIGN components |
+| Technical | Java 21, Spring Boot 4.1, PostgreSQL | Specified by the project; PostgreSQL is the one database server of the DESIGN stack |
 | Technical | Deployable as a single container | Must fit the installer of the DaaS application (NFA-11) |
 | Compatibility | Keep the API contract that the frontend and the DaaS application use | Both clients must keep working (NFA-3) |
 | Organizational | University project with changing contributors | Documentation and automated checks matter more than personal knowledge |
@@ -114,14 +114,14 @@ The DaaS application (design-daas) uses it to ask whether a user may call one of
 | Frontend | Credentials and tokens; users, admins, groups, desktops and permission data |
 | DaaS application | Function name and user id (or token) → `allow` / `deny` |
 | Mail server | Registration codes, account-deletion notices, application-access requests |
-| MariaDB | All persistent state |
+| PostgreSQL | All persistent state |
 
 ### 3.2 Technical context
 
 | Interface | Protocol | Notes |
 |---|---|---|
 | REST API | HTTP/JSON; the token endpoint uses form encoding | TLS ends at the reverse proxy; the backend listens on port 8080 |
-| Database | JDBC (MariaDB driver) | Schema owned by Flyway |
+| Database | JDBC (PostgreSQL driver) | Schema owned by Flyway |
 | Mail | SMTP with STARTTLS (port 587) | Optional; disabled by default |
 | Health | `GET /actuator/health` | For container and load-balancer probes |
 | Request correlation | `X-Request-ID` header | Shared by frontend, DaaS application and backend logs |
@@ -133,7 +133,7 @@ The DaaS application (design-daas) uses it to ask whether a user may call one of
 | Compatibility (NFA-3) | Reproduce the used endpoints of the PHP backend exactly; drop unused ones; document every deviation ([API reference](api.md#14-differences-from-the-php-backend)) |
 | Fail-closed authorization (NFA-1, NFA-2) | Port the permission cascade, but resolve conflicts within a step deterministically (deny wins) instead of by random group order |
 | Revocable tokens (NFA-6) | Self-issued RS256 JWTs; every `jti` is stored and checked on each request |
-| Stateless scaling (NFA-7) | No HTTP session; all state lives in MariaDB |
+| Stateless scaling (NFA-7) | No HTTP session; all state lives in PostgreSQL |
 | Enforced architecture (NFA-8) | Package by feature, layered inside each module, checked by 19 ArchUnit rules |
 | Enforced quality (NFA-9) | JaCoCo gate of 80 % line and branch coverage in `mvn verify`, run by CI on every push and pull request |
 | Documentation that cannot drift (NFA-10) | OpenAPI generated from the code; Javadoc on every type and public method |
@@ -259,7 +259,7 @@ An admin enabling an account also enables an account whose e-mail was never veri
 
 ### 7.1 General deployment
 
-![General deployment with reverse proxy, backend container, MariaDB and SMTP](images/arc42-7-1-general-deployment.png)
+![General deployment with reverse proxy, backend container, PostgreSQL and SMTP](images/arc42-7-1-general-deployment.png)
 
 *Source: [`images/src/arc42-7-1-general-deployment.mmd`](images/src/arc42-7-1-general-deployment.mmd)*
 
@@ -383,7 +383,7 @@ immediately.
 |---|---|---|
 | Unit tests | JUnit 5, Mockito, AssertJ | 253 in 33 classes |
 | Integration tests | Spring Boot test context, MockMvc, H2 | 96 in 12 classes |
-| Migration test | Testcontainers with MariaDB 11.4 | 1 (needs Docker) |
+| Migration test | Testcontainers with PostgreSQL 18 | 1 (needs Docker) |
 | Architecture tests | ArchUnit | 19 rules |
 | End-to-end tests | Playwright, in the `design-daas-e2e` repository | Separate suite |
 
@@ -435,7 +435,7 @@ results are from the test run of 2026-11-13 (`mvn verify`: 369 tests, 0 failures
 | QS-6 | A refresh token is used twice | The second use returns `401 invalid_grant` | FA-2 | `TokenControllerIntegrationTest` | ✅ Pass |
 | QS-7 | A contributor puts a service in the wrong package | `mvn verify` fails | NFA-8 | `ArchitectureTest` | ✅ Pass |
 | QS-8 | A change lowers line or branch coverage below 80 % | `mvn verify` fails | NFA-9 | JaCoCo `check` goal | ✅ Pass |
-| QS-9 | A migration does not match the entities | The MariaDB integration test fails | ADR-6 | `FlywayMariaDbIntegrationTest` | Not run: needs Docker, which was not available for this run |
+| QS-9 | A migration does not match the entities | The PostgreSQL integration test fails | ADR-6 | `FlywayPostgresIntegrationTest` | ✅ Pass (2026-11-17, PostgreSQL 18) |
 | QS-10 | An unexpected exception occurs | `500` with a support reference only | Security | `GlobalExceptionHandlerTest` | ✅ Pass |
 
 ## 11. Risks and technical debt
@@ -464,7 +464,6 @@ when the code is touched) · **Info** (worth knowing). Each entry was checked ag
 | R-17 | Info | The `{isoCode}` path variable is validated but unused | `UserController` | Use it in the e-mail, or document it as reserved |
 | R-18 | Info | Two classes are named `UserNotFoundException` (`auth.exception` → 401, `user.exception` → 404) | Exceptions | Rename the `auth` one |
 | R-19 | Info | `AuthorizationServerConfig` configures JWT keys, not an authorization server | `config` | Rename to `JwtConfig` |
-| R-20 | Info | MariaDB `TIMESTAMP` ends on 2038-01-19 (MariaDB 11.5+ extends the range) | Migrations | Move to `DATETIME(6)` with UTC handling before it matters |
 | R-21 | Info | The repository has no licence file | Repository root | Agree on a licence with the university and add `LICENSE` |
 | R-22 | Low | An admin's own password cannot be changed through the API (`PATCH /user/{id}` only accepts regular users). The DESIGN installer works around this with a script that writes the hash into the database | `AdminController` | Add `PATCH /admin/{id}` or a "change my password" endpoint |
 | R-23 | Low | The backend does not evaluate `X-Forwarded-Prefix`. Behind nginx at `/auth/`, Swagger UI may therefore show server URLs without the prefix. Not verified | `application.yml` | Set `server.forward-headers-strategy: framework` and test Swagger behind the proxy |
@@ -479,7 +478,7 @@ when the code is touched) · **Info** (worth knowing). Each entry was checked ag
 | Health endpoint required a token | `/actuator/health` is public and shows only the overall status | ✅ Fixed |
 | `/version` was public but had no handler | Rule removed; the health endpoint replaces it | ✅ Fixed |
 | Token endpoint accepted JSON but ignored it | Only form data is accepted; JSON returns `415` | ✅ Fixed |
-| Migrations were never tested against MariaDB | `FlywayMariaDbIntegrationTest` (Testcontainers) | ✅ Fixed |
+| Migrations were never tested against the real database | `FlywayPostgresIntegrationTest` (Testcontainers; was `FlywayMariaDbIntegrationTest` until the move to PostgreSQL) | ✅ Fixed |
 | Token bucket lost fractional refills; bucket map grew without bound | Fractions are kept; full buckets are evicted every five minutes | ✅ Fixed |
 | No API for deleting resources or maintaining permission rules | Delete endpoints and the permission management API | ✅ Fixed |
 | Duplicate rules possible | Unique constraints in V5 | ✅ Fixed |

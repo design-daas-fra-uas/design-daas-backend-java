@@ -2,7 +2,7 @@ sequenceDiagram
     autonumber
     participant D as DaaS application
     participant P as PermissionService
-    participant DB as MariaDB
+    participant DB as PostgreSQL
     D->>P: GET /permissions/{function}/{userId} (admin token)
     P->>DB: load account
     alt unknown account
