@@ -11,7 +11,6 @@ import de.frauas.design.backend.permission.dto.PermissionRuleKind;
 import de.frauas.design.backend.permission.exception.AdminRuleNotAllowedException;
 import de.frauas.design.backend.permission.exception.EndpointGroupAlreadyExistsException;
 import de.frauas.design.backend.permission.exception.EndpointNotFoundException;
-import de.frauas.design.backend.permission.exception.EndpointNotObsoleteException;
 import de.frauas.design.backend.permission.exception.PermissionRuleAlreadyExistsException;
 import de.frauas.design.backend.permission.exception.PermissionRuleNotFoundException;
 import de.frauas.design.backend.permission.model.Endpoint;
@@ -146,7 +145,6 @@ class PermissionManagementServiceTest {
             verify(endpointRepository).save(captor.capture());
             assertThat(captor.getValue().getFunctionName()).isEqualTo("vm_start");
             assertThat(captor.getValue().getDescription()).isEqualTo("Start a VM");
-            assertThat(captor.getValue().isObsolete()).isFalse();
             assertThat(result.getAdded()).isEqualTo(1);
         }
 
@@ -160,35 +158,38 @@ class PermissionManagementServiceTest {
             EndpointSyncResultDto result = service.syncEndpoints(makeSyncRequest("vm_start", "Start a VM"));
 
             verify(endpointRepository, never()).save(any());
-            assertThat(result.getAdded() + result.getUpdated() + result.getObsolete()).isZero();
+            assertThat(result.getAdded() + result.getUpdated() + result.getDeleted()).isZero();
         }
 
         @Test
-        @DisplayName("marks missing names obsolete instead of deleting them")
-        void syncEndpoints_missing_marksObsolete() {
-            Endpoint gone = makeEndpoint(1, "vm_old");
-            when(endpointRepository.findAll()).thenReturn(List.of(gone));
-
-            EndpointSyncResultDto result = service.syncEndpoints(makeSyncRequest());
-
-            assertThat(gone.isObsolete()).isTrue();
-            verify(endpointRepository).save(gone);
-            verify(endpointRepository, never()).delete(any());
-            assertThat(result.getObsolete()).isEqualTo(1);
-        }
-
-        @Test
-        @DisplayName("revives an obsolete endpoint that is listed again and updates its description")
-        void syncEndpoints_obsoleteListed_revives() {
+        @DisplayName("updates a changed description")
+        void syncEndpoints_changedDescription_updates() {
             Endpoint endpoint = makeEndpoint(1, "vm_start");
-            endpoint.setObsolete(true);
+            endpoint.setDescription("old");
             when(endpointRepository.findAll()).thenReturn(List.of(endpoint));
 
             EndpointSyncResultDto result = service.syncEndpoints(makeSyncRequest("vm_start", "Start a VM"));
 
-            assertThat(endpoint.isObsolete()).isFalse();
             assertThat(endpoint.getDescription()).isEqualTo("Start a VM");
+            verify(endpointRepository).save(endpoint);
             assertThat(result.getUpdated()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("deletes missing names with their rules and group memberships")
+        void syncEndpoints_missing_deletes() {
+            Endpoint gone = makeEndpoint(1, "vm_old");
+            EndpointGroup group = makeEndpointGroup(5, "vm-control", gone);
+            when(endpointRepository.findAll()).thenReturn(List.of(gone));
+            when(endpointGroupRepository.findAllByEndpoints_Id(1)).thenReturn(List.of(group));
+
+            EndpointSyncResultDto result = service.syncEndpoints(makeSyncRequest());
+
+            verify(endpointUserAccessRepo).deleteAllByEndpoint_Id(1);
+            verify(endpointUserGroupAccessRepo).deleteAllByEndpoint_Id(1);
+            assertThat(group.getEndpoints()).isEmpty();
+            verify(endpointRepository).delete(gone);
+            assertThat(result.getDeleted()).isEqualTo(1);
         }
 
         @Test
@@ -203,47 +204,6 @@ class PermissionManagementServiceTest {
             verify(endpointRepository).save(captor.capture());
             assertThat(captor.getValue().getDescription()).hasSize(255);
             assertThat(result.getAdded()).isEqualTo(1);
-        }
-    }
-
-    @Nested
-    @DisplayName("deleteEndpoint")
-    class DeleteEndpoint {
-
-        @Test
-        @DisplayName("deletes its rules, removes it from endpoint groups, then deletes it")
-        void deleteEndpoint_existing_cleansUpAndDeletes() {
-            Endpoint endpoint = makeEndpoint(1, "vm_start");
-            endpoint.setObsolete(true);
-            EndpointGroup group = makeEndpointGroup(5, "vm-control", endpoint);
-            when(endpointRepository.findById(1)).thenReturn(Optional.of(endpoint));
-            when(endpointGroupRepository.findAllByEndpoints_Id(1)).thenReturn(List.of(group));
-
-            service.deleteEndpoint(1);
-
-            verify(endpointUserAccessRepo).deleteAllByEndpoint_Id(1);
-            verify(endpointUserGroupAccessRepo).deleteAllByEndpoint_Id(1);
-            assertThat(group.getEndpoints()).isEmpty();
-            verify(endpointRepository).delete(endpoint);
-        }
-
-        @Test
-        @DisplayName("throws when design-daas still has the endpoint")
-        void deleteEndpoint_notObsolete_throws() {
-            when(endpointRepository.findById(1)).thenReturn(Optional.of(makeEndpoint(1, "vm_start")));
-
-            assertThatThrownBy(() -> service.deleteEndpoint(1)).isInstanceOf(EndpointNotObsoleteException.class);
-            verify(endpointUserAccessRepo, never()).deleteAllByEndpoint_Id(any());
-            verify(endpointRepository, never()).delete(any());
-        }
-
-        @Test
-        @DisplayName("throws when the endpoint does not exist")
-        void deleteEndpoint_notFound_throws() {
-            when(endpointRepository.findById(9)).thenReturn(Optional.empty());
-
-            assertThatThrownBy(() -> service.deleteEndpoint(9)).isInstanceOf(EndpointNotFoundException.class);
-            verify(endpointRepository, never()).delete(any());
         }
     }
 

@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static de.frauas.design.backend.integration.MockJwt.adminJwt;
+import static org.assertj.core.api.Assertions.assertThat;
 import static de.frauas.design.backend.integration.MockJwt.userJwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -65,12 +66,10 @@ class PermissionManagementIntegrationTest extends BaseIntegrationTest {
     void cleanup() {
         // Deleting through the API also removes the rules that point to these rows.
         findEndpointGroupId().ifPresent(id -> performAsAdmin(delete("/endpoint_group/" + id)));
-        // Only obsolete endpoints may be deleted
-        endpointRepository.findByFunctionName(FUNCTION).ifPresent(e -> {
-            e.setObsolete(true);
-            endpointRepository.save(e);
-            performAsAdmin(delete("/endpoint/" + e.getId()));
-        });
+        // A sync without the endpoint deletes it with its rules
+        endpointRepository.findByFunctionName(FUNCTION).ifPresent(e -> performAsAdmin(put("/endpoints/sync")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"endpoints\":[]}")));
         userRepository.findByEmail(USER_EMAIL).ifPresent(userRepository::delete);
         userGroupRepository.findByName(USER_GROUP).ifPresent(userGroupRepository::delete);
     }
@@ -135,12 +134,12 @@ class PermissionManagementIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("PUT /endpoints/sync – add, unchanged, invalid name 400, obsolete, delete only when obsolete")
+    @DisplayName("PUT /endpoints/sync – add, unchanged, invalid name 400, missing names deleted with their rules")
     void endpointSyncLifecycle() throws Exception {
         List<Map<String, String>> listed = List.of(Map.of("functionName", FUNCTION, "description", "test"));
         syncEndpoints(listed).andExpect(status().isOk()).andExpect(jsonPath("$.added").value(1));
         syncEndpoints(listed).andExpect(status().isOk()).andExpect(jsonPath("$.added").value(0));
-        Integer id = endpointRepository.findByFunctionName(FUNCTION).orElseThrow().getId();
+        Integer endpointId = endpointRepository.findByFunctionName(FUNCTION).orElseThrow().getId();
 
         syncEndpoints(List.of(Map.of("functionName", "bad name!"))).andExpect(status().isBadRequest());
         mockMvc.perform(put("/endpoints/sync").with(userJwt(1))
@@ -148,22 +147,22 @@ class PermissionManagementIntegrationTest extends BaseIntegrationTest {
                         .content("{\"endpoints\":[]}"))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(get("/endpoints").with(adminJwt(999)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.functionName == '" + FUNCTION + "')].obsolete").value(false));
-        mockMvc.perform(delete("/endpoint/" + id).with(adminJwt(999))).andExpect(status().isConflict());
+        User user = saveUser(null);
+        postJson("/permission_rule", Map.of(
+                        "kind", "USER_ENDPOINT", "subjectId", user.getId(), "targetId", endpointId, "allow", true))
+                .andExpect(status().isCreated());
 
-        // Missing from the list: kept, but marked obsolete
-        syncEndpoints(List.of()).andExpect(status().isOk());
-        mockMvc.perform(get("/endpoints").with(adminJwt(999)))
-                .andExpect(jsonPath("$[?(@.functionName == '" + FUNCTION + "')].obsolete").value(true));
+        // Missing from the list: deleted together with its rule
+        syncEndpoints(List.of()).andExpect(status().isOk()).andExpect(jsonPath("$.deleted").value(1));
+        assertThat(endpointRepository.findByFunctionName(FUNCTION)).isEmpty();
+        assertThat(endpointUserAccessRepository.findAll()).noneMatch(r -> r.getEndpoint().getId().equals(endpointId));
 
-        mockMvc.perform(delete("/endpoint/" + id).with(adminJwt(999))).andExpect(status().isNoContent());
-        mockMvc.perform(delete("/endpoint/" + id).with(adminJwt(999))).andExpect(status().isNotFound());
+        // Endpoints cannot be created or deleted by hand
         mockMvc.perform(post("/endpoint").with(adminJwt(999))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"functionName\":\"x\"}"))
                 .andExpect(status().is4xxClientError());
+        mockMvc.perform(delete("/endpoint/" + endpointId).with(adminJwt(999))).andExpect(status().is4xxClientError());
     }
 
     @Test

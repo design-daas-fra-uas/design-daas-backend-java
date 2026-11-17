@@ -327,9 +327,8 @@ endpoint-group rule.
 
 | Method | Path | Send | Returns | Possible errors |
 |---|---|---|---|---|
-| `GET` | `/endpoints` | – | `200` `[{id, functionName, description, obsolete}]` | – |
-| `PUT` | `/endpoints/sync` | `{endpoints: [{functionName, description?}]}` | `200` `{added, updated, obsolete}` | `400` invalid name |
-| `DELETE` | `/endpoint/{id}` | – | `204` | `404`; `409` not obsolete |
+| `GET` | `/endpoints` | – | `200` `[{id, functionName, description}]` | – |
+| `PUT` | `/endpoints/sync` | `{endpoints: [{functionName, description?}]}` | `200` `{added, updated, deleted}` | `400` invalid name |
 | `GET` | `/endpoint_groups` | – | `200` `[{id, name, description, endpointIds}]` | – |
 | `POST` | `/endpoint_group` | `{name, description?, endpointIds?}` | `201` | `400` unknown endpoint; `409` name already used |
 | `PATCH` | `/endpoint_group/{id}` | `{name?, description?, endpointIds?}` | `200` endpoint group | `400`, `404`, `409` |
@@ -430,8 +429,8 @@ The templates are in `src/main/resources/templates/mail/`.
   `environment_start`. The DaaS application defines about 130 such names (`name=` in its
   `*_routes.py` files, plus `<name>_vm` / `<name>_container` for the create routes). It sends the
   whole list to `PUT /endpoints/sync` at startup (and again every minute until that works), so the
-  endpoint list always matches its code. A name missing from the list is marked `obsolete` instead
-  of deleted, so its rules survive; only obsolete endpoints can be deleted.
+  endpoint list always matches its code. A name missing from the list is deleted together with its
+  rules and group memberships.
 - The permission check runs only if the DaaS application has `DAAS_AUTH_CHECK_ENDPOINTS=true`. It
   is off by default. When it is switched on, every function that has no rule is denied for regular
   users.

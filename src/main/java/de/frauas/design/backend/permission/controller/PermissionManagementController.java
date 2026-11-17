@@ -60,10 +60,10 @@ public class PermissionManagementController {
 
     /**
      * Makes the endpoint list match the routes of design-daas, which calls this at startup
-     * with its admin account. Unknown names are added, missing ones marked obsolete.
+     * with its admin account. Unknown names are added, missing ones deleted with their rules.
      *
      * @param request the complete list of function names design-daas checks
-     * @return 200 OK with how many endpoints were added, updated and marked obsolete
+     * @return 200 OK with how many endpoints were added, updated and deleted
      */
     @PutMapping("/endpoints/sync")
     public ResponseEntity<EndpointSyncResultDto> syncEndpoints(@Valid @RequestBody EndpointSyncRequest request) {
@@ -73,28 +73,6 @@ public class PermissionManagementController {
         EndpointSyncResultDto result = permissionManagementService.syncEndpoints(request);
 
         return ResponseEntity.ok(result);
-    }
-
-    /**
-     * Deletes an obsolete endpoint together with every rule targeting it.
-     *
-     * @param id the ID of the endpoint to delete
-     * @return 204 No Content
-     * @throws de.frauas.design.backend.permission.exception.EndpointNotFoundException if no
-     *     endpoint exists with the given id (404)
-     * @throws de.frauas.design.backend.permission.exception.EndpointNotObsoleteException if
-     *     design-daas still has the endpoint (409)
-     */
-    @DeleteMapping("/endpoint/{id}")
-    public ResponseEntity<Void> deleteEndpoint(@PathVariable Integer id) {
-
-        log.info("DELETE /endpoint/{} — deleting endpoint", id);
-
-        permissionManagementService.deleteEndpoint(id);
-
-        log.info("DELETE /endpoint/{} — endpoint deleted", id);
-
-        return ResponseEntity.noContent().build();
     }
 
     /**

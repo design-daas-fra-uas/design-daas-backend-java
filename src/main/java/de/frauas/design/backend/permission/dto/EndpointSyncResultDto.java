@@ -9,8 +9,8 @@ import lombok.Data;
 public class EndpointSyncResultDto {
     /** Names that were not known before. */
     private int added;
-    /** Known names whose description changed or that were obsolete before. */
+    /** Known names whose description changed. */
     private int updated;
-    /** Known names that are no longer in the list (newly marked obsolete). */
-    private int obsolete;
+    /** Known names that are no longer in the list (deleted with their rules). */
+    private int deleted;
 }

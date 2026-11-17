@@ -188,8 +188,8 @@ The DaaS application asks the backend whether a user may call a function. For re
 answer comes from rules. **Admins are always allowed.** If no rule matches, the answer is deny.
 
 The functions themselves (the endpoints) are not created by hand: the DaaS application sends its
-complete list to `PUT /endpoints/sync` every time it starts. A function it no longer has is marked
-`obsolete`; it keeps its rules and can then be deleted with `DELETE /endpoint/{id}`.
+complete list to `PUT /endpoints/sync` every time it starts. A function it no longer has is deleted
+together with its rules and group memberships.
 
 Example: allow user group 3 to start environments (the DaaS function `environment_start`).
 

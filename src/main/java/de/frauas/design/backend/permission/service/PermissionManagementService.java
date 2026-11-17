@@ -13,7 +13,6 @@ import de.frauas.design.backend.permission.exception.AdminRuleNotAllowedExceptio
 import de.frauas.design.backend.permission.exception.EndpointGroupAlreadyExistsException;
 import de.frauas.design.backend.permission.exception.EndpointGroupNotFoundException;
 import de.frauas.design.backend.permission.exception.EndpointNotFoundException;
-import de.frauas.design.backend.permission.exception.EndpointNotObsoleteException;
 import de.frauas.design.backend.permission.exception.PermissionRuleAlreadyExistsException;
 import de.frauas.design.backend.permission.exception.PermissionRuleNotFoundException;
 import de.frauas.design.backend.permission.model.Endpoint;
@@ -54,7 +53,7 @@ import java.util.stream.Collectors;
  * evaluates: endpoints (design-daas functions), endpoint groups, and the four kinds of
  * allow/deny rule (see {@link PermissionRuleKind}).
  *
- * <p>Deleting an endpoint or endpoint group first deletes the rules and group memberships
+ * <p>Deleting an endpoint (in a sync) or endpoint group first deletes the rules and group memberships
  * that point to it, so the result is the same on PostgreSQL (which would cascade anyway) and on
  * the H2 test database (which has no cascading foreign keys).</p>
  */
@@ -92,12 +91,11 @@ public class PermissionManagementService {
 
     /**
      * Makes the endpoint table match the route list design-daas sends at startup: unknown
-     * names are added, descriptions are updated, and names missing from the list are marked
-     * obsolete. Obsolete endpoints keep their rules and group memberships, so a route that
-     * comes back (or a design-daas started from an older version) finds them unchanged.
+     * names are added, changed descriptions are updated, and names missing from the list are
+     * deleted together with their rules and group memberships.
      *
      * @param request the complete list of function names design-daas checks
-     * @return how many endpoints were added, updated and marked obsolete
+     * @return how many endpoints were added, updated and deleted
      */
     @Transactional
     public EndpointSyncResultDto syncEndpoints(EndpointSyncRequest request) {
@@ -119,23 +117,21 @@ public class PermissionManagementService {
                 endpoint.setDescription(description);
                 endpointRepository.save(endpoint);
                 added++;
-            } else if (endpoint.isObsolete() || !Objects.equals(endpoint.getDescription(), description)) {
+            } else if (!Objects.equals(endpoint.getDescription(), description)) {
                 endpoint.setDescription(description);
-                endpoint.setObsolete(false);
                 endpointRepository.save(endpoint);
                 updated++;
             }
         }
-        int obsolete = 0;
+        int deleted = 0;
         for (Endpoint endpoint : known.values()) {
-            if (!listed.contains(endpoint.getFunctionName()) && !endpoint.isObsolete()) {
-                endpoint.setObsolete(true);
-                endpointRepository.save(endpoint);
-                obsolete++;
+            if (!listed.contains(endpoint.getFunctionName())) {
+                deleteEndpoint(endpoint);
+                deleted++;
             }
         }
-        log.info("syncEndpoints — added={} updated={} obsolete={}", added, updated, obsolete);
-        return EndpointSyncResultDto.builder().added(added).updated(updated).obsolete(obsolete).build();
+        log.info("syncEndpoints — added={} updated={} deleted={}", added, updated, deleted);
+        return EndpointSyncResultDto.builder().added(added).updated(updated).deleted(deleted).build();
     }
 
     private static String cutDescription(String description) {
@@ -147,28 +143,18 @@ public class PermissionManagementService {
     }
 
     /**
-     * Deletes an obsolete endpoint together with every rule targeting it, and removes it from
-     * all endpoint groups.
-     *
-     * @param id the ID of the endpoint to delete
-     * @throws EndpointNotFoundException if no endpoint exists with the given id
-     * @throws EndpointNotObsoleteException if design-daas still has the endpoint
+     * Deletes an endpoint design-daas no longer has, together with every rule targeting it,
+     * and removes it from all endpoint groups.
      */
-    @Transactional
-    public void deleteEndpoint(Integer id) {
-        log.debug("deleteEndpoint — id={}", id);
-        Endpoint endpoint = findEndpointById(id);
-        if (!endpoint.isObsolete()) {
-            log.warn("deleteEndpoint — id={} functionName={} is not obsolete", id, endpoint.getFunctionName());
-            throw new EndpointNotObsoleteException(endpoint.getFunctionName());
-        }
+    private void deleteEndpoint(Endpoint endpoint) {
+        Integer id = endpoint.getId();
         endpointUserAccessRepo.deleteAllByEndpoint_Id(id);
         endpointUserGroupAccessRepo.deleteAllByEndpoint_Id(id);
         List<EndpointGroup> groups = endpointGroupRepository.findAllByEndpoints_Id(id);
         groups.forEach(g -> g.getEndpoints().remove(endpoint));
         endpointGroupRepository.saveAll(groups);
         endpointRepository.delete(endpoint);
-        log.info("deleteEndpoint — deleted id={} functionName={}", id, endpoint.getFunctionName());
+        log.info("syncEndpoints — deleted id={} functionName={}", id, endpoint.getFunctionName());
     }
 
     // -------------------------------------------------------------------------

@@ -31,8 +31,4 @@ public class Endpoint {
 
     @Column
     private String description;
-
-    /** Set when the last sync from design-daas no longer listed this function. */
-    @Column(nullable = false)
-    private boolean obsolete;
 }
