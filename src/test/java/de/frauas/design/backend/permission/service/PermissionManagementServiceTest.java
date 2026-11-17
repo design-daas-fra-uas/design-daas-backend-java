@@ -1,16 +1,17 @@
 package de.frauas.design.backend.permission.service;
 
-import de.frauas.design.backend.permission.dto.EndpointCreateRequest;
 import de.frauas.design.backend.permission.dto.EndpointGroupCreateRequest;
 import de.frauas.design.backend.permission.dto.EndpointGroupDto;
 import de.frauas.design.backend.permission.dto.EndpointGroupPatchRequest;
+import de.frauas.design.backend.permission.dto.EndpointSyncRequest;
+import de.frauas.design.backend.permission.dto.EndpointSyncResultDto;
 import de.frauas.design.backend.permission.dto.PermissionRuleCreateRequest;
 import de.frauas.design.backend.permission.dto.PermissionRuleDto;
 import de.frauas.design.backend.permission.dto.PermissionRuleKind;
 import de.frauas.design.backend.permission.exception.AdminRuleNotAllowedException;
-import de.frauas.design.backend.permission.exception.EndpointAlreadyExistsException;
 import de.frauas.design.backend.permission.exception.EndpointGroupAlreadyExistsException;
 import de.frauas.design.backend.permission.exception.EndpointNotFoundException;
+import de.frauas.design.backend.permission.exception.EndpointNotObsoleteException;
 import de.frauas.design.backend.permission.exception.PermissionRuleAlreadyExistsException;
 import de.frauas.design.backend.permission.exception.PermissionRuleNotFoundException;
 import de.frauas.design.backend.permission.model.Endpoint;
@@ -117,35 +118,91 @@ class PermissionManagementServiceTest {
         return req;
     }
 
+    private EndpointSyncRequest makeSyncRequest(String... nameAndDescription) {
+        List<EndpointSyncRequest.Item> items = new ArrayList<>();
+        for (int i = 0; i < nameAndDescription.length; i += 2) {
+            EndpointSyncRequest.Item item = new EndpointSyncRequest.Item();
+            item.setFunctionName(nameAndDescription[i]);
+            item.setDescription(nameAndDescription[i + 1]);
+            items.add(item);
+        }
+        EndpointSyncRequest req = new EndpointSyncRequest();
+        req.setEndpoints(items);
+        return req;
+    }
+
     @Nested
-    @DisplayName("createEndpoint")
-    class CreateEndpoint {
+    @DisplayName("syncEndpoints")
+    class SyncEndpoints {
 
         @Test
-        @DisplayName("saves a new endpoint")
-        void createEndpoint_valid_saves() {
-            EndpointCreateRequest req = new EndpointCreateRequest();
-            req.setFunctionName("vm_start");
-            req.setDescription("Start a VM");
-            when(endpointRepository.existsByFunctionName("vm_start")).thenReturn(false);
+        @DisplayName("adds unknown names")
+        void syncEndpoints_unknown_adds() {
+            when(endpointRepository.findAll()).thenReturn(List.of());
 
-            service.createEndpoint(req);
+            EndpointSyncResultDto result = service.syncEndpoints(makeSyncRequest("vm_start", "Start a VM"));
 
             ArgumentCaptor<Endpoint> captor = ArgumentCaptor.forClass(Endpoint.class);
             verify(endpointRepository).save(captor.capture());
             assertThat(captor.getValue().getFunctionName()).isEqualTo("vm_start");
             assertThat(captor.getValue().getDescription()).isEqualTo("Start a VM");
+            assertThat(captor.getValue().isObsolete()).isFalse();
+            assertThat(result.getAdded()).isEqualTo(1);
         }
 
         @Test
-        @DisplayName("throws on a duplicate function name")
-        void createEndpoint_duplicate_throws() {
-            EndpointCreateRequest req = new EndpointCreateRequest();
-            req.setFunctionName("vm_start");
-            when(endpointRepository.existsByFunctionName("vm_start")).thenReturn(true);
+        @DisplayName("leaves an unchanged endpoint alone")
+        void syncEndpoints_unchanged_noSave() {
+            Endpoint endpoint = makeEndpoint(1, "vm_start");
+            endpoint.setDescription("Start a VM");
+            when(endpointRepository.findAll()).thenReturn(List.of(endpoint));
 
-            assertThatThrownBy(() -> service.createEndpoint(req)).isInstanceOf(EndpointAlreadyExistsException.class);
+            EndpointSyncResultDto result = service.syncEndpoints(makeSyncRequest("vm_start", "Start a VM"));
+
             verify(endpointRepository, never()).save(any());
+            assertThat(result.getAdded() + result.getUpdated() + result.getObsolete()).isZero();
+        }
+
+        @Test
+        @DisplayName("marks missing names obsolete instead of deleting them")
+        void syncEndpoints_missing_marksObsolete() {
+            Endpoint gone = makeEndpoint(1, "vm_old");
+            when(endpointRepository.findAll()).thenReturn(List.of(gone));
+
+            EndpointSyncResultDto result = service.syncEndpoints(makeSyncRequest());
+
+            assertThat(gone.isObsolete()).isTrue();
+            verify(endpointRepository).save(gone);
+            verify(endpointRepository, never()).delete(any());
+            assertThat(result.getObsolete()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("revives an obsolete endpoint that is listed again and updates its description")
+        void syncEndpoints_obsoleteListed_revives() {
+            Endpoint endpoint = makeEndpoint(1, "vm_start");
+            endpoint.setObsolete(true);
+            when(endpointRepository.findAll()).thenReturn(List.of(endpoint));
+
+            EndpointSyncResultDto result = service.syncEndpoints(makeSyncRequest("vm_start", "Start a VM"));
+
+            assertThat(endpoint.isObsolete()).isFalse();
+            assertThat(endpoint.getDescription()).isEqualTo("Start a VM");
+            assertThat(result.getUpdated()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("cuts descriptions to the column size and ignores duplicate names")
+        void syncEndpoints_longDescriptionAndDuplicate() {
+            when(endpointRepository.findAll()).thenReturn(List.of());
+
+            EndpointSyncResultDto result =
+                    service.syncEndpoints(makeSyncRequest("vm_start", "x".repeat(300), "vm_start", "again"));
+
+            ArgumentCaptor<Endpoint> captor = ArgumentCaptor.forClass(Endpoint.class);
+            verify(endpointRepository).save(captor.capture());
+            assertThat(captor.getValue().getDescription()).hasSize(255);
+            assertThat(result.getAdded()).isEqualTo(1);
         }
     }
 
@@ -157,6 +214,7 @@ class PermissionManagementServiceTest {
         @DisplayName("deletes its rules, removes it from endpoint groups, then deletes it")
         void deleteEndpoint_existing_cleansUpAndDeletes() {
             Endpoint endpoint = makeEndpoint(1, "vm_start");
+            endpoint.setObsolete(true);
             EndpointGroup group = makeEndpointGroup(5, "vm-control", endpoint);
             when(endpointRepository.findById(1)).thenReturn(Optional.of(endpoint));
             when(endpointGroupRepository.findAllByEndpoints_Id(1)).thenReturn(List.of(group));
@@ -167,6 +225,16 @@ class PermissionManagementServiceTest {
             verify(endpointUserGroupAccessRepo).deleteAllByEndpoint_Id(1);
             assertThat(group.getEndpoints()).isEmpty();
             verify(endpointRepository).delete(endpoint);
+        }
+
+        @Test
+        @DisplayName("throws when design-daas still has the endpoint")
+        void deleteEndpoint_notObsolete_throws() {
+            when(endpointRepository.findById(1)).thenReturn(Optional.of(makeEndpoint(1, "vm_start")));
+
+            assertThatThrownBy(() -> service.deleteEndpoint(1)).isInstanceOf(EndpointNotObsoleteException.class);
+            verify(endpointUserAccessRepo, never()).deleteAllByEndpoint_Id(any());
+            verify(endpointRepository, never()).delete(any());
         }
 
         @Test

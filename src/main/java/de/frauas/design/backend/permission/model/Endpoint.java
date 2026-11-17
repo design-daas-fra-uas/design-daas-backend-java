@@ -12,7 +12,8 @@ import lombok.Setter;
 
 /**
  * A single callable design-daas function that permission rules can target directly
- * or indirectly through an {@link EndpointGroup}.
+ * or indirectly through an {@link EndpointGroup}. The list is not edited by hand: design-daas
+ * sends it at startup (see {@code PermissionManagementService#syncEndpoints}).
  */
 @Entity
 @Table(name = "endpoints")
@@ -30,4 +31,8 @@ public class Endpoint {
 
     @Column
     private String description;
+
+    /** Set when the last sync from design-daas no longer listed this function. */
+    @Column(nullable = false)
+    private boolean obsolete;
 }

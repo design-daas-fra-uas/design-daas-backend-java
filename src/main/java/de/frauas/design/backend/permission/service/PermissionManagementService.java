@@ -1,18 +1,19 @@
 package de.frauas.design.backend.permission.service;
 
-import de.frauas.design.backend.permission.dto.EndpointCreateRequest;
 import de.frauas.design.backend.permission.dto.EndpointDto;
 import de.frauas.design.backend.permission.dto.EndpointGroupCreateRequest;
 import de.frauas.design.backend.permission.dto.EndpointGroupDto;
 import de.frauas.design.backend.permission.dto.EndpointGroupPatchRequest;
+import de.frauas.design.backend.permission.dto.EndpointSyncRequest;
+import de.frauas.design.backend.permission.dto.EndpointSyncResultDto;
 import de.frauas.design.backend.permission.dto.PermissionRuleCreateRequest;
 import de.frauas.design.backend.permission.dto.PermissionRuleDto;
 import de.frauas.design.backend.permission.dto.PermissionRuleKind;
 import de.frauas.design.backend.permission.exception.AdminRuleNotAllowedException;
-import de.frauas.design.backend.permission.exception.EndpointAlreadyExistsException;
 import de.frauas.design.backend.permission.exception.EndpointGroupAlreadyExistsException;
 import de.frauas.design.backend.permission.exception.EndpointGroupNotFoundException;
 import de.frauas.design.backend.permission.exception.EndpointNotFoundException;
+import de.frauas.design.backend.permission.exception.EndpointNotObsoleteException;
 import de.frauas.design.backend.permission.exception.PermissionRuleAlreadyExistsException;
 import de.frauas.design.backend.permission.exception.PermissionRuleNotFoundException;
 import de.frauas.design.backend.permission.model.Endpoint;
@@ -40,8 +41,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -68,6 +72,9 @@ public class PermissionManagementService {
     private final UserRepository userRepository;
     private final UserGroupRepository userGroupRepository;
 
+    // Size of endpoints.description
+    private static final int DESCRIPTION_MAX = 255;
+
     // -------------------------------------------------------------------------
     // Endpoints
     // -------------------------------------------------------------------------
@@ -84,36 +91,77 @@ public class PermissionManagementService {
     }
 
     /**
-     * Registers a design-daas function so rules can target it.
+     * Makes the endpoint table match the route list design-daas sends at startup: unknown
+     * names are added, descriptions are updated, and names missing from the list are marked
+     * obsolete. Obsolete endpoints keep their rules and group memberships, so a route that
+     * comes back (or a design-daas started from an older version) finds them unchanged.
      *
-     * @param request the function name and optional description
-     * @throws EndpointAlreadyExistsException if the function name is already registered
+     * @param request the complete list of function names design-daas checks
+     * @return how many endpoints were added, updated and marked obsolete
      */
     @Transactional
-    public void createEndpoint(EndpointCreateRequest request) {
-        log.debug("createEndpoint — functionName={}", request.getFunctionName());
-        if (endpointRepository.existsByFunctionName(request.getFunctionName())) {
-            log.warn("createEndpoint — functionName={} already exists", request.getFunctionName());
-            throw new EndpointAlreadyExistsException(request.getFunctionName());
+    public EndpointSyncResultDto syncEndpoints(EndpointSyncRequest request) {
+        log.debug("syncEndpoints — {} names", request.getEndpoints().size());
+        Map<String, Endpoint> known = endpointRepository.findAll().stream()
+                .collect(Collectors.toMap(Endpoint::getFunctionName, e -> e));
+        Set<String> listed = new HashSet<>();
+        int added = 0;
+        int updated = 0;
+        for (EndpointSyncRequest.Item item : request.getEndpoints()) {
+            if (!listed.add(item.getFunctionName())) {
+                continue;
+            }
+            String description = cutDescription(item.getDescription());
+            Endpoint endpoint = known.get(item.getFunctionName());
+            if (endpoint == null) {
+                endpoint = new Endpoint();
+                endpoint.setFunctionName(item.getFunctionName());
+                endpoint.setDescription(description);
+                endpointRepository.save(endpoint);
+                added++;
+            } else if (endpoint.isObsolete() || !Objects.equals(endpoint.getDescription(), description)) {
+                endpoint.setDescription(description);
+                endpoint.setObsolete(false);
+                endpointRepository.save(endpoint);
+                updated++;
+            }
         }
-        Endpoint endpoint = new Endpoint();
-        endpoint.setFunctionName(request.getFunctionName());
-        endpoint.setDescription(request.getDescription());
-        endpointRepository.save(endpoint);
-        log.info("createEndpoint — created id={} functionName={}", endpoint.getId(), endpoint.getFunctionName());
+        int obsolete = 0;
+        for (Endpoint endpoint : known.values()) {
+            if (!listed.contains(endpoint.getFunctionName()) && !endpoint.isObsolete()) {
+                endpoint.setObsolete(true);
+                endpointRepository.save(endpoint);
+                obsolete++;
+            }
+        }
+        log.info("syncEndpoints — added={} updated={} obsolete={}", added, updated, obsolete);
+        return EndpointSyncResultDto.builder().added(added).updated(updated).obsolete(obsolete).build();
+    }
+
+    private static String cutDescription(String description) {
+        if (description == null || description.isBlank()) {
+            return null;
+        }
+        String trimmed = description.strip();
+        return trimmed.length() > DESCRIPTION_MAX ? trimmed.substring(0, DESCRIPTION_MAX) : trimmed;
     }
 
     /**
-     * Deletes an endpoint together with every rule targeting it, and removes it from all
-     * endpoint groups.
+     * Deletes an obsolete endpoint together with every rule targeting it, and removes it from
+     * all endpoint groups.
      *
      * @param id the ID of the endpoint to delete
      * @throws EndpointNotFoundException if no endpoint exists with the given id
+     * @throws EndpointNotObsoleteException if design-daas still has the endpoint
      */
     @Transactional
     public void deleteEndpoint(Integer id) {
         log.debug("deleteEndpoint — id={}", id);
         Endpoint endpoint = findEndpointById(id);
+        if (!endpoint.isObsolete()) {
+            log.warn("deleteEndpoint — id={} functionName={} is not obsolete", id, endpoint.getFunctionName());
+            throw new EndpointNotObsoleteException(endpoint.getFunctionName());
+        }
         endpointUserAccessRepo.deleteAllByEndpoint_Id(id);
         endpointUserGroupAccessRepo.deleteAllByEndpoint_Id(id);
         List<EndpointGroup> groups = endpointGroupRepository.findAllByEndpoints_Id(id);

@@ -1,10 +1,11 @@
 package de.frauas.design.backend.permission.controller;
 
-import de.frauas.design.backend.permission.dto.EndpointCreateRequest;
 import de.frauas.design.backend.permission.dto.EndpointDto;
 import de.frauas.design.backend.permission.dto.EndpointGroupCreateRequest;
 import de.frauas.design.backend.permission.dto.EndpointGroupDto;
 import de.frauas.design.backend.permission.dto.EndpointGroupPatchRequest;
+import de.frauas.design.backend.permission.dto.EndpointSyncRequest;
+import de.frauas.design.backend.permission.dto.EndpointSyncResultDto;
 import de.frauas.design.backend.permission.dto.PermissionRuleCreateRequest;
 import de.frauas.design.backend.permission.dto.PermissionRuleDto;
 import de.frauas.design.backend.permission.dto.PermissionRuleKind;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -28,7 +30,7 @@ import java.util.List;
 
 /**
  * REST endpoints for managing the permission data that {@link PermissionController}
- * evaluates: endpoints, endpoint groups and allow/deny rules. All endpoints require the
+ * evaluates: endpoints (synced from design-daas), endpoint groups and allow/deny rules. All endpoints require the
  * {@code SCOPE_admin} authority (enforced class-wide).
  */
 @Slf4j
@@ -57,29 +59,31 @@ public class PermissionManagementController {
     }
 
     /**
-     * Registers a design-daas function so rules can target it. A duplicate function name is
-     * rejected with 409 by {@link PermissionManagementService#createEndpoint}.
+     * Makes the endpoint list match the routes of design-daas, which calls this at startup
+     * with its admin account. Unknown names are added, missing ones marked obsolete.
      *
-     * @param request the endpoint to create
-     * @return 201 Created with no body
+     * @param request the complete list of function names design-daas checks
+     * @return 200 OK with how many endpoints were added, updated and marked obsolete
      */
-    @PostMapping("/endpoint")
-    public ResponseEntity<Void> createEndpoint(@Valid @RequestBody EndpointCreateRequest request) {
+    @PutMapping("/endpoints/sync")
+    public ResponseEntity<EndpointSyncResultDto> syncEndpoints(@Valid @RequestBody EndpointSyncRequest request) {
 
-        log.info("POST /endpoint — creating endpoint functionName={}", request.getFunctionName());
+        log.info("PUT /endpoints/sync — syncing {} endpoints", request.getEndpoints().size());
 
-        permissionManagementService.createEndpoint(request);
+        EndpointSyncResultDto result = permissionManagementService.syncEndpoints(request);
 
-        return ResponseEntity.status(HttpStatus.CREATED).build();
+        return ResponseEntity.ok(result);
     }
 
     /**
-     * Deletes an endpoint together with every rule targeting it.
+     * Deletes an obsolete endpoint together with every rule targeting it.
      *
      * @param id the ID of the endpoint to delete
      * @return 204 No Content
      * @throws de.frauas.design.backend.permission.exception.EndpointNotFoundException if no
      *     endpoint exists with the given id (404)
+     * @throws de.frauas.design.backend.permission.exception.EndpointNotObsoleteException if
+     *     design-daas still has the endpoint (409)
      */
     @DeleteMapping("/endpoint/{id}")
     public ResponseEntity<Void> deleteEndpoint(@PathVariable Integer id) {

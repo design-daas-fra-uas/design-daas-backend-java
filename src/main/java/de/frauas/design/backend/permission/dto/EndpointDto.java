@@ -11,6 +11,7 @@ public class EndpointDto {
     private Integer id;
     private String functionName;
     private String description;
+    private boolean obsolete;
 
     /** Maps an {@link Endpoint} entity to its API representation. */
     public static EndpointDto from(Endpoint endpoint) {
@@ -18,6 +19,7 @@ public class EndpointDto {
                 .id(endpoint.getId())
                 .functionName(endpoint.getFunctionName())
                 .description(endpoint.getDescription())
+                .obsolete(endpoint.isObsolete())
                 .build();
     }
 }

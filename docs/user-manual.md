@@ -187,23 +187,22 @@ up ids.
 The DaaS application asks the backend whether a user may call a function. For regular users the
 answer comes from rules. **Admins are always allowed.** If no rule matches, the answer is deny.
 
+The functions themselves (the endpoints) are not created by hand: the DaaS application sends its
+complete list to `PUT /endpoints/sync` every time it starts. A function it no longer has is marked
+`obsolete`; it keeps its rules and can then be deleted with `DELETE /endpoint/{id}`.
+
 Example: allow user group 3 to start environments (the DaaS function `environment_start`).
 
 ```bash
-# 1. Register the function
-curl -X POST http://localhost:8080/endpoint \
-  -H "Authorization: Bearer <access_token>" -H 'Content-Type: application/json' \
-  -d '{"functionName": "environment_start", "description": "Start an environment"}'
-
-# 2. Look up its id
+# 1. Look up the id of the function
 curl http://localhost:8080/endpoints -H "Authorization: Bearer <access_token>"
 
-# 3. Add an allow rule for the group (endpoint id 12)
+# 2. Add an allow rule for the group (endpoint id 12)
 curl -X POST http://localhost:8080/permission_rule \
   -H "Authorization: Bearer <access_token>" -H 'Content-Type: application/json' \
   -d '{"kind": "USER_GROUP_ENDPOINT", "subjectId": 3, "targetId": 12, "allow": true}'
 
-# 4. Check the result for user 7
+# 3. Check the result for user 7
 curl http://localhost:8080/permissions/environment_start/7 -H "Authorization: Bearer <access_token>"
 # {"result": "allow", "user": {"id": 7, "name": "Jane Doe"}}
 ```

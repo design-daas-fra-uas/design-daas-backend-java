@@ -327,9 +327,9 @@ endpoint-group rule.
 
 | Method | Path | Send | Returns | Possible errors |
 |---|---|---|---|---|
-| `GET` | `/endpoints` | – | `200` `[{id, functionName, description}]` | – |
-| `POST` | `/endpoint` | `{functionName, description?}` | `201` | `400` invalid name; `409` already exists |
-| `DELETE` | `/endpoint/{id}` | – | `204` | `404` |
+| `GET` | `/endpoints` | – | `200` `[{id, functionName, description, obsolete}]` | – |
+| `PUT` | `/endpoints/sync` | `{endpoints: [{functionName, description?}]}` | `200` `{added, updated, obsolete}` | `400` invalid name |
+| `DELETE` | `/endpoint/{id}` | – | `204` | `404`; `409` not obsolete |
 | `GET` | `/endpoint_groups` | – | `200` `[{id, name, description, endpointIds}]` | – |
 | `POST` | `/endpoint_group` | `{name, description?, endpointIds?}` | `201` | `400` unknown endpoint; `409` name already used |
 | `PATCH` | `/endpoint_group/{id}` | `{name?, description?, endpointIds?}` | `200` endpoint group | `400`, `404`, `409` |
@@ -382,8 +382,8 @@ string; the length is counted in characters.
 | `POST /desktop` | `description` | yes | Text, at most 255 |
 | | `groups[].description` | yes, per entry | Text, at most 255; unique among desktop groups |
 | `POST /desktop_group` | `description` | yes | Text, at most 255; unique |
-| `POST /endpoint` | `functionName` | yes | 1–255 characters from letters, digits, `_`, `.`, `-`; unique |
-| | `description` | no | Text, at most 255 |
+| `PUT /endpoints/sync` | `endpoints[].functionName` | yes, per entry | 1–255 characters from letters, digits, `_`, `.`, `-`; duplicates are ignored |
+| | `endpoints[].description` | no | Text; cut to 255 characters |
 | `POST /endpoint_group` | `name` | yes | Text, at most 255; unique |
 | | `description` | no | Text, at most 255 |
 | | `endpointIds` | no | List of existing endpoint ids |
@@ -428,7 +428,10 @@ The templates are in `src/main/resources/templates/mail/`.
   `GET /permissions/{functionName}/{userId}` and `GET /oauth2/user/session`.
 - The `functionName` is the name of the DaaS endpoint being called, for example `app_list` or
   `environment_start`. The DaaS application defines about 130 such names (`name=` in its
-  `*_routes.py` files). Each one must be created with `POST /endpoint` before a rule can grant it.
+  `*_routes.py` files, plus `<name>_vm` / `<name>_container` for the create routes). It sends the
+  whole list to `PUT /endpoints/sync` at startup (and again every minute until that works), so the
+  endpoint list always matches its code. A name missing from the list is marked `obsolete` instead
+  of deleted, so its rules survive; only obsolete endpoints can be deleted.
 - The permission check runs only if the DaaS application has `DAAS_AUTH_CHECK_ENDPOINTS=true`. It
   is off by default. When it is switched on, every function that has no rule is denied for regular
   users.
