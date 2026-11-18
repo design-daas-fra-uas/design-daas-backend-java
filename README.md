@@ -32,16 +32,15 @@ interface that the frontend and the DaaS application already use, so both keep w
 | API description | OpenAPI 3 with Swagger UI (springdoc) |
 | Quality gates | 19 ArchUnit rules and at least 80 % line and branch coverage, enforced by `mvn verify` |
 
-## Documentation
+## Related repositories
 
-| Document | Audience | Contents |
-|---|---|---|
-| [User manual](docs/user-manual.md) | Users, admins, frontend developers | Registration, login, sessions, administration tasks |
-| [API reference](docs/api.md) | Frontend and DaaS-application developers | Every endpoint with access level, request, response and errors |
-| [Database](docs/database.md) | Developers, database administrators | Schema, ER diagram, migrations, permission resolution |
-| [Architecture (arc42)](docs/arc42.md) | Architects, developers | Goals, context, building blocks, decisions, quality, risks |
-| [Developer guide](docs/development.md) | Developers | Project layout, build, tests, conventions, definition of done |
-| [Operations guide](docs/operations.md) | Operators, DevOps | Production checklist, secrets, monitoring, backups, upgrades |
+| Repository | Role |
+|---|---|
+| `design-daas` | DaaS application; calls the permission check |
+| `design-daas-application-frontend` | Web frontend |
+| `design-daas-e2e` | End-to-end tests of the whole system (Playwright) |
+
+## Installing the complete system
 
 When the backend runs in the `local` or `dev` profile, the interactive API description is
 available at <http://localhost:8080/swagger-ui.html>.
@@ -227,18 +226,9 @@ line, for example `--app.token.cleanup.cron="0 0 4 * * *"`:
   service creates on first start; keep it secret and back it up.
 - Every request is checked against the database, so logout, disabling and password changes take
   effect immediately.
-- Report suspected vulnerabilities privately to the project maintainers, not in a public issue.
 
 See [Security in arc42](docs/arc42.md#81-security) for the threat overview and
 [Data protection](docs/arc42.md#86-data-protection) for the personal data that is stored.
-
-## Known limitations
-
-- Admins cannot change their own password through the API, and locked accounts cannot be unlocked
-  early through it. The [Operations guide](docs/operations.md#administrative-tasks) describes
-  the workarounds.
-- Rate limits are kept in memory, per instance.
-- The full, prioritised list is in [Risks and technical debt](docs/arc42.md#11-risks-and-technical-debt).
 
 ## Contributing
 
@@ -246,10 +236,16 @@ Read the [Developer guide](docs/development.md) before opening a pull request. A
 complete when `mvn verify` passes and the code, tests, documentation and `CHANGELOG.md` are
 updated together (see the [definition of done](docs/development.md#definition-of-done)).
 
-## Related repositories
+## Documentation
 
-| Repository | Role |
-|---|---|
-| `design-daas` | DaaS application; calls the permission check |
-| `design-daas-application-frontend` | Web frontend |
-| `design-daas-e2e` | End-to-end tests of the whole system (Playwright) |
+| Document | Audience | Contents |
+|---|---|---|
+| [User manual](docs/user-manual.md) | Users, admins, frontend developers | Registration, login, sessions, administration tasks |
+| [API reference](docs/api.md) | Frontend and DaaS-application developers | Every endpoint with access level, request, response and errors |
+| [Database](docs/database.md) | Developers, database administrators | Schema, ER diagram, migrations, permission resolution |
+| [Architecture (arc42)](docs/arc42.md) | Architects, developers | Goals, context, building blocks, decisions, quality, risks |
+| [Developer guide](docs/development.md) | Developers | Project layout, build, tests, conventions, definition of done |
+| [Operations guide](docs/operations.md) | Operators, DevOps | Production checklist, secrets, monitoring, backups, upgrades |
+
+When the backend runs in the `local` or `dev` profile, the interactive API description is
+available at <http://localhost:8080/swagger-ui.html>.
