@@ -23,7 +23,7 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      # Tests (incl. the Flyway/MariaDB test via Testcontainers, Docker is
+      # Tests (incl. the Flyway/PostgreSQL test via Testcontainers, Docker is
       # available on the runner) + JaCoCo coverage gate (see pom.xml)
       - name: Build, test and check coverage
         run: mvn -B verify
