@@ -263,4 +263,38 @@ class UserGroupServiceTest {
             assertThat(groups).isEmpty();
         }
     }
+
+    @Nested
+    @DisplayName("deleteUserGroup")
+    class DeleteUserGroup {
+
+        @Test
+        @DisplayName("removes the group from its members, then deletes it")
+        void deleteUserGroup_removesMembershipAndDeletes() {
+            UserGroup group = new UserGroup();
+            group.setId(3);
+            group.setName("g");
+            User member = new User();
+            member.setId(7);
+            member.getGroups().add(group);
+            group.getUsers().add(member);
+            when(userGroupRepository.findById(3)).thenReturn(Optional.of(group));
+
+            userGroupService.deleteUserGroup(3);
+
+            assertThat(member.getGroups()).isEmpty();
+            verify(userRepository).saveAll(List.of(member));
+            verify(userGroupRepository).delete(group);
+        }
+
+        @Test
+        @DisplayName("throws when the group does not exist")
+        void deleteUserGroup_notFound_throws() {
+            when(userGroupRepository.findById(99)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> userGroupService.deleteUserGroup(99))
+                    .isInstanceOf(UserGroupNotFoundException.class);
+            verify(userGroupRepository, never()).delete(any());
+        }
+    }
 }

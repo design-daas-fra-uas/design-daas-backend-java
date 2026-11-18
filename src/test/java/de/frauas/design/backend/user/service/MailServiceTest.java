@@ -87,6 +87,38 @@ class MailServiceTest {
     }
 
     @Nested
+    @DisplayName("sendAccountDeletedEmail")
+    class SendAccountDeletedEmail {
+
+        @Test
+        @DisplayName("does not send when mail is disabled, only logs")
+        void mailDisabled_doesNotSend() {
+            ReflectionTestUtils.setField(mailService, "mailEnabled", false);
+
+            mailService.sendAccountDeletedEmail("alice@example.com", "Alice");
+
+            verify(mailSender, never()).createMimeMessage();
+            verify(mailSender, never()).send(any(MimeMessage.class));
+        }
+
+        @Test
+        @DisplayName("renders the account-deleted template and sends it to the deleted account")
+        void mailEnabled_rendersTemplateAndSends() throws Exception {
+            ReflectionTestUtils.setField(mailService, "mailEnabled", true);
+            ReflectionTestUtils.setField(mailService, "fromAddress", "noreply@design.local");
+            MimeMessage message = newMimeMessage();
+            when(mailSender.createMimeMessage()).thenReturn(message);
+
+            mailService.sendAccountDeletedEmail("alice@example.com", "Alice");
+
+            verify(mailSender).send(message);
+            assertThat(message.getAllRecipients()).extracting(Object::toString).containsExactly("alice@example.com");
+            assertThat(message.getSubject()).isEqualTo("DESIGN DaaS — Account Deleted");
+            assertThat(message.getContent().toString()).contains("Alice").contains("alice@example.com");
+        }
+    }
+
+    @Nested
     @DisplayName("sendApplicationRequestEmail")
     class SendApplicationRequestEmail {
 

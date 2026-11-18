@@ -114,29 +114,7 @@ public class TokenService {
             throw new InvalidRequestException("username and password are required");
         }
 
-        var userOpt = userRepository.findByEmail(username);
-        if (userOpt.isEmpty()) {
-            // always run BCrypt to prevent timing-based user enumeration
-            passwordEncoder.matches(password, dummyHash());
-            log.warn("passwordGrant — unknown user={}", LogMasking.maskEmail(username));
-            throw new InvalidCredentialsException();
-        }
-
-        BaseUser user = userOpt.get();
-
-        // reject while the account is locked
-        accountLockoutService.assertNotLocked(user);
-
-        if (!passwordEncoder.matches(password, user.getPassword())) {
-            accountLockoutService.recordFailedAttempt(user);
-            log.warn("passwordGrant — wrong password user={}", LogMasking.maskEmail(username));
-            throw new InvalidCredentialsException();
-        }
-
-        if (!user.isEnabled()) {
-            log.warn("passwordGrant — disabled account user={}", LogMasking.maskEmail(username));
-            throw new AccountDisabledException();
-        }
+        BaseUser user = authenticate(username, password);
 
         // Successful authentication — reset any lockout state
         accountLockoutService.resetOnSuccess(user);
@@ -172,29 +150,8 @@ public class TokenService {
             throw new InvalidRequestException("refresh_token is required");
         }
 
-        // Only accept non-revoked tokens
-        var refreshTokenOpt = refreshTokenRepository.findActiveByTokenValue(refreshToken);
-        if (refreshTokenOpt.isEmpty()) {
-            log.warn("refreshGrant — invalid or already-used refresh token");
-            throw new InvalidRefreshTokenException();
-        }
-
-        RefreshTokenEntity refreshTokenEntity = refreshTokenOpt.get();
-        if (refreshTokenEntity.getExpiresAt().isBefore(Instant.now(clock))) {
-            refreshTokenRepository.delete(refreshTokenEntity);
-            log.warn("refreshGrant — expired refresh token userId={}", refreshTokenEntity.getUserId());
-            throw new ExpiredRefreshTokenException();
-        }
-
-        // Re-validate user
-        var userOpt = userRepository.findById(refreshTokenEntity.getUserId());
-        if (userOpt.isEmpty() || !userOpt.get().isEnabled()) {
-            refreshTokenRepository.delete(refreshTokenEntity);
-            log.warn("refreshGrant — user not found or disabled userId={}", refreshTokenEntity.getUserId());
-            throw new RefreshTokenUserInvalidException();
-        }
-
-        BaseUser user = userOpt.get();
+        RefreshTokenEntity refreshTokenEntity = findUsableRefreshToken(refreshToken);
+        BaseUser user = findEnabledTokenOwner(refreshTokenEntity);
         String grantedScope = scopeResolver.parsePersistedScope(refreshTokenEntity.getScope());
 
         // Issue new access token
@@ -210,6 +167,67 @@ public class TokenService {
                 LogMasking.maskEmail(user.getEmail()),
                 user.getId());
         return buildTokenResponse(newAccessToken, newRefreshToken, grantedScope);
+    }
+
+    /**
+     * Checks the credentials of a password grant, including lockout and the disabled flag.
+     *
+     * @return the authenticated user
+     */
+    private BaseUser authenticate(String username, String password) {
+        var userOpt = userRepository.findByEmail(username);
+        if (userOpt.isEmpty()) {
+            // always run BCrypt to prevent timing-based user enumeration
+            passwordEncoder.matches(password, dummyHash());
+            log.warn("passwordGrant — unknown user={}", LogMasking.maskEmail(username));
+            throw new InvalidCredentialsException();
+        }
+
+        BaseUser user = userOpt.get();
+
+        // reject while the account is locked
+        accountLockoutService.assertNotLocked(user);
+
+        if (!passwordEncoder.matches(password, user.getPassword())) {
+            accountLockoutService.recordFailedAttempt(user);
+            log.warn("passwordGrant — wrong password user={}", LogMasking.maskEmail(username));
+            throw new InvalidCredentialsException();
+        }
+
+        if (!user.isEnabled()) {
+            log.warn("passwordGrant — disabled account user={}", LogMasking.maskEmail(username));
+            throw new AccountDisabledException();
+        }
+        return user;
+    }
+
+    /** Returns the stored refresh token if it is neither revoked nor expired; deletes it if expired. */
+    private RefreshTokenEntity findUsableRefreshToken(String refreshToken) {
+        // Only accept non-revoked tokens
+        var refreshTokenOpt = refreshTokenRepository.findActiveByTokenValue(refreshToken);
+        if (refreshTokenOpt.isEmpty()) {
+            log.warn("refreshGrant — invalid or already-used refresh token");
+            throw new InvalidRefreshTokenException();
+        }
+
+        RefreshTokenEntity refreshTokenEntity = refreshTokenOpt.get();
+        if (refreshTokenEntity.getExpiresAt().isBefore(Instant.now(clock))) {
+            refreshTokenRepository.delete(refreshTokenEntity);
+            log.warn("refreshGrant — expired refresh token userId={}", refreshTokenEntity.getUserId());
+            throw new ExpiredRefreshTokenException();
+        }
+        return refreshTokenEntity;
+    }
+
+    /** Re-validates the owner of a refresh token; deletes the token if the owner is gone or disabled. */
+    private BaseUser findEnabledTokenOwner(RefreshTokenEntity refreshTokenEntity) {
+        var userOpt = userRepository.findById(refreshTokenEntity.getUserId());
+        if (userOpt.isEmpty() || !userOpt.get().isEnabled()) {
+            refreshTokenRepository.delete(refreshTokenEntity);
+            log.warn("refreshGrant — user not found or disabled userId={}", refreshTokenEntity.getUserId());
+            throw new RefreshTokenUserInvalidException();
+        }
+        return userOpt.get();
     }
 
     /**

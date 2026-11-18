@@ -39,8 +39,11 @@ public class ClientIpResolver {
         if (forwardedFor == null || forwardedFor.isBlank() || !isTrustedProxy(remoteAddress)) {
             return remoteAddress;
         }
+        return clientFromForwardedChain(forwardedFor.split(","), remoteAddress);
+    }
 
-        String[] hops = forwardedFor.split(",");
+    /** Walks the {@code X-Forwarded-For} hops from right to left and returns the first untrusted one. */
+    private String clientFromForwardedChain(String[] hops, String remoteAddress) {
         for (int i = hops.length - 1; i >= 0; i--) {
             String hop = hops[i].trim();
             if (!hop.isEmpty() && !isTrustedProxy(hop)) {
@@ -58,42 +61,34 @@ public class ClientIpResolver {
     private boolean matchesCidr(String address, String cidr) {
         try {
             String[] parts = cidr.split("/", 2);
-
-            InetAddress network = InetAddress.getByName(parts[0]);
-            InetAddress candidate = InetAddress.getByName(address);
-
-            if (network.getAddress().length != candidate.getAddress().length) {
+            byte[] networkBytes = InetAddress.getByName(parts[0]).getAddress();
+            byte[] candidateBytes = InetAddress.getByName(address).getAddress();
+            if (networkBytes.length != candidateBytes.length) {
                 return false;
             }
-
-            int prefixLength = parts.length == 2 ? Integer.parseInt(parts[1]) : network.getAddress().length * 8;
-
-            if (prefixLength < 0 || prefixLength > network.getAddress().length * 8) {
-                return false;
-            }
-
-            byte[] networkBytes = network.getAddress();
-            byte[] candidateBytes = candidate.getAddress();
-
-            int fullBytes = prefixLength / 8;
-            int remainingBits = prefixLength % 8;
-
-            for (int i = 0; i < fullBytes; i++) {
-                if (networkBytes[i] != candidateBytes[i]) {
-                    return false;
-                }
-            }
-
-            if (remainingBits == 0) {
-                return true;
-            }
-
-            int mask = 0xFF << (8 - remainingBits);
-
-            return (networkBytes[fullBytes] & mask) == (candidateBytes[fullBytes] & mask);
-
+            int maxPrefix = networkBytes.length * 8;
+            int prefixLength = parts.length == 2 ? Integer.parseInt(parts[1]) : maxPrefix;
+            return prefixLength >= 0 && prefixLength <= maxPrefix
+                    && prefixMatches(networkBytes, candidateBytes, prefixLength);
         } catch (Exception ignored) {
             return false;
         }
+    }
+
+    /** Compares the first {@code prefixLength} bits of two addresses of equal length. */
+    private static boolean prefixMatches(byte[] networkBytes, byte[] candidateBytes, int prefixLength) {
+        int fullBytes = prefixLength / 8;
+        int remainingBits = prefixLength % 8;
+
+        for (int i = 0; i < fullBytes; i++) {
+            if (networkBytes[i] != candidateBytes[i]) {
+                return false;
+            }
+        }
+        if (remainingBits == 0) {
+            return true;
+        }
+        int mask = 0xFF << (8 - remainingBits);
+        return (networkBytes[fullBytes] & mask) == (candidateBytes[fullBytes] & mask);
     }
 }

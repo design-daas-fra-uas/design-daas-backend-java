@@ -92,6 +92,29 @@ public class UserGroupService {
     }
 
     /**
+     * Permanently deletes a user group.
+     *
+     * <p>The group is first removed from every member, because {@link User} owns the
+     * membership join table. Its desktop-group links (owned by the group) are removed by
+     * Hibernate, and its permission rules by the {@code ON DELETE CASCADE} foreign keys.
+     * The members themselves are kept.</p>
+     *
+     * @param id the ID of the group to delete
+     * @throws UserGroupNotFoundException if no group exists with the given id
+     */
+    @Transactional
+    public void deleteUserGroup(Integer id) {
+        log.debug("deleteUserGroup — id={}", id);
+        UserGroup group = userGroupRepository.findById(id).orElseThrow(() -> new UserGroupNotFoundException(id));
+        List<User> members = new ArrayList<>(group.getUsers());
+        members.forEach(u -> u.getGroups().remove(group));
+        userRepository.saveAll(members);
+        group.getUsers().clear();
+        userGroupRepository.delete(group);
+        log.info("deleteUserGroup — deleted id={} name={} formerMembers={}", id, group.getName(), members.size());
+    }
+
+    /**
      * Replaces a group's membership to match exactly {@code desiredIds}, adding/removing
      * the group on the owning side ({@link User#getGroups()}) as needed.
      *

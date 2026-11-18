@@ -1,0 +1,14 @@
+stateDiagram-v2
+    direction LR
+    [*] --> Unverified: registers
+    Unverified --> Unverified: new code
+    Unverified --> Active: confirms code
+    [*] --> Active: created by admin
+    Active --> Locked: 5 failed logins
+    Locked --> Active: after 15 min + login
+    Active --> Disabled: disabled
+    Disabled --> Active: enabled
+    Unverified --> Deleted: deleted
+    Active --> Deleted: deleted
+    Disabled --> Deleted: deleted
+    Deleted --> [*]

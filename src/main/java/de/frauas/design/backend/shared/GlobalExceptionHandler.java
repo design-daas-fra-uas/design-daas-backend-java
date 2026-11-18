@@ -2,8 +2,10 @@ package de.frauas.design.backend.shared;
 
 import de.frauas.design.backend.shared.dto.ErrorResponse;
 import de.frauas.design.backend.shared.exception.ConflictException;
+import de.frauas.design.backend.shared.logging.RequestIdFilter;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -31,8 +33,9 @@ import java.util.stream.Collectors;
  * catch-all 500 handler. All of them are rendered as {@link ErrorResponse}.</p>
  *
  * <p>The generic handler never exposes raw exception messages to callers.
- * Instead, it generates a correlation ID, logs the full exception server-side, and
- * returns only the correlation ID so that operators can locate the log entry.</p>
+ * Instead, it logs the full exception server-side and returns only a support reference:
+ * the request id from {@link RequestIdFilter}, which also appears on every other log line
+ * of the request, so operators can find the whole request in the logs.</p>
  */
 @Slf4j
 @RestControllerAdvice
@@ -116,15 +119,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
-     * Catch-all handler — logs the full exception with a correlation ID and
-     * returns only the correlation ID to the caller.  Internal details (class names,
-     * SQL errors, file paths) are never sent over the wire.
+     * Catch-all handler — logs the full exception and returns only a support reference to
+     * the caller. Internal details (class names, SQL errors, file paths) are never sent over
+     * the wire.
+     *
+     * <p>The reference is the request id, so it matches the {@code X-Request-ID} response
+     * header and every log line of the request. Outside a request (no id in the logging
+     * context) a new UUID is used instead.</p>
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex) {
-        String correlationId = UUID.randomUUID().toString();
-        log.error("[{}] Unhandled exception: {}", correlationId, ex.getMessage(), ex);
+        String reference = MDC.get(RequestIdFilter.MDC_KEY);
+        if (reference == null) {
+            reference = UUID.randomUUID().toString();
+        }
+        log.error("[{}] Unhandled exception: {}", reference, ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorResponse("An unexpected error occurred. Support reference: " + correlationId));
+                .body(new ErrorResponse("An unexpected error occurred. Support reference: " + reference));
     }
 }

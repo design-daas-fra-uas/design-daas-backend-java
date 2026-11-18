@@ -26,7 +26,7 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Design DaaS Backend API")
-                        .version("1.0.0")
+                        .version("2.0.0")
                         .description("Spring Boot backend replacing the PHP backend"))
                 .addSecurityItem(new SecurityRequirement().addList(BEARER_AUTH))
                 .components(new Components()

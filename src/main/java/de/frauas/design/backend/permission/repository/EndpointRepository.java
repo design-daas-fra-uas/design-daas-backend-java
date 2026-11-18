@@ -14,4 +14,7 @@ public interface EndpointRepository extends JpaRepository<Endpoint, Integer> {
 
     /** Finds an endpoint by its unique function name. */
     Optional<Endpoint> findByFunctionName(String functionName);
+
+    /** Returns whether an endpoint with this function name already exists. */
+    boolean existsByFunctionName(String functionName);
 }

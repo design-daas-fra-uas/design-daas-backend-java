@@ -28,6 +28,6 @@ public class CreateUserRequest {
     @Pattern(regexp = PasswordPolicy.PASSWORD_REGEX, message = PasswordPolicy.MESSAGE)
     private String password;
 
-    /** Optional — assign the user to these UserGroup IDs on creation. */
+    /** Optional — assign the user to these UserGroup IDs on creation. Admin callers only (see UserController). */
     private List<Integer> groups;
 }

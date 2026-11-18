@@ -592,6 +592,62 @@ class UserServiceTest {
     }
 
     // -------------------------------------------------------------------------
+    // getUserById
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("getUserById")
+    class GetUserById {
+
+        @Test
+        @DisplayName("returns the user")
+        void getUserById_existing_returnsDto() {
+            when(userRepository.findUserById(1)).thenReturn(Optional.of(makeUser(1, "u@e.com", true)));
+
+            assertThat(userService.getUserById(1).getEmail()).isEqualTo("u@e.com");
+        }
+
+        @Test
+        @DisplayName("throws when the user does not exist")
+        void getUserById_notFound_throws() {
+            when(userRepository.findUserById(99)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> userService.getUserById(99)).isInstanceOf(NoSuchElementException.class);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // deleteUser
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("deleteUser")
+    class DeleteUser {
+
+        @Test
+        @DisplayName("deletes the user and e-mails them")
+        void deleteUser_existing_deletesAndMails() {
+            User u = makeUser(1, "u@e.com", true);
+            when(userRepository.findUserById(1)).thenReturn(Optional.of(u));
+
+            userService.deleteUser(1);
+
+            verify(userRepository).delete(u);
+            verify(mailService).sendAccountDeletedEmail("u@e.com", "Test User");
+        }
+
+        @Test
+        @DisplayName("throws and sends nothing when the user does not exist")
+        void deleteUser_notFound_throws() {
+            when(userRepository.findUserById(99)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> userService.deleteUser(99)).isInstanceOf(NoSuchElementException.class);
+            verify(userRepository, never()).delete(any());
+            verifyNoInteractions(mailService);
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // password validation boundary tests
     // -------------------------------------------------------------------------
 

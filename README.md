@@ -1,72 +1,79 @@
-# Design DaaS Backend (Java)
+# DESIGN DaaS Backend
 
-Spring Boot backend for **DESIGN DaaS** (Desktop-as-a-Service) at Frankfurt UAS. It replaces the
-earlier PHP backend and provides:
+[![CI](https://github.com/design-daas-fra-uas/design-daas-backend-java/actions/workflows/ci.yml/badge.svg)](https://github.com/design-daas-fra-uas/design-daas-backend-java/actions/workflows/ci.yml)
+![Java 21](https://img.shields.io/badge/Java-21-blue)
+![Spring Boot 4.1](https://img.shields.io/badge/Spring%20Boot-4.1-brightgreen)
 
-- **Authentication**: login with e-mail and password, which returns a signed JWT access token
-  plus a refresh token, rotated on every refresh, with logout and server-side revocation.
-- **User management**: self-service registration with e-mail verification, plus admin-managed
+The identity, authorization and inventory service of **DESIGN DaaS** (Desktop as a Service) at
+Frankfurt University of Applied Sciences.
+
+In plain words: this service handles logging in, user accounts and groups, the list of available
+desktops, and the rules for who may do what. It replaces the earlier PHP backend and keeps the
+interface that the frontend and the DaaS application already use, so both keep working.
+
+## Features
+
+- **Authentication:** OAuth2-style password and refresh grants. They issue RS256-signed JWT
+  access tokens and single-use refresh tokens that rotate on every refresh. Tokens can be revoked
+  on the server at any time.
+- **Account management:** self-registration with e-mail verification, plus administration of
   users, admins and user groups.
-- **Desktop management**: desktops and desktop groups, and which user groups may use which
-  desktop groups.
-- **Permission checks**: a 4-step allow/deny cascade that answers "may user X call function Y?"
-  for the DESIGN DaaS platform.
+- **Desktop inventory:** desktops and desktop groups, and which user groups may use them.
+- **Permission check:** a fail-closed four-step cascade that answers *"may this user call this
+  function?"* for the DaaS application. The rules are maintained through the API.
+- **Hardening:** BCrypt password hashes, account lockout, per-IP rate limiting, request-id
+  tracing, and error responses that never expose internals.
 
 | | |
 |---|---|
-| Version | 2.0.0 (`pom.xml`) |
-| Language / runtime | Java 21 |
-| Framework | Spring Boot 4.1 (Spring Framework 7, Spring Security 7) |
-| Database | MariaDB (schema managed by Flyway) |
-| API docs | OpenAPI 3 / Swagger UI (springdoc 3) |
-| Build | Maven 3.9+ |
-
----
+| Version | 2.0.0 — see [CHANGELOG](CHANGELOG.md) |
+| Runtime | Java 21, Spring Boot 4.1 (Spring Framework 7, Spring Security 7) |
+| Database | PostgreSQL, schema managed by Flyway |
+| API description | OpenAPI 3 with Swagger UI (springdoc) |
+| Quality gates | 19 ArchUnit rules and at least 80 % line and branch coverage, enforced by `mvn verify` |
 
 ## Documentation
 
-| Document | For | Contents |
+| Document | Audience | Contents |
 |---|---|---|
-| [User manual](docs/user-manual.md) | Users, admins, frontend devs | How to use the API as a user or admin: registration, login, tokens and the typical admin workflow. |
-| [API reference](docs/api.md) | Frontend and platform devs | Every endpoint with access rules, request bodies and status codes. |
-| [Database](docs/database.md) | Developers, DBAs | Schema, ER diagram, migrations and how permissions are resolved. |
-| [Architecture (arc42)](docs/arc42.md) | Architects, developers | Architecture documentation following the arc42 template. |
-| [Developer guide](docs/development.md) | Developers | Project layout, commands, coding and documentation conventions. |
-| [Operations guide](docs/operations.md) | DevOps, operators | Deployment checklist, secrets, backups, monitoring and troubleshooting. |
+| [User manual](docs/user-manual.md) | Users, admins, frontend developers | Registration, login, sessions, administration tasks |
+| [API reference](docs/api.md) | Frontend and DaaS-application developers | Every endpoint with access level, request, response and errors |
+| [Database](docs/database.md) | Developers, database administrators | Schema, ER diagram, migrations, permission resolution |
+| [Architecture (arc42)](docs/arc42.md) | Architects, developers | Goals, context, building blocks, decisions, quality, risks |
+| [Developer guide](docs/development.md) | Developers | Project layout, build, tests, conventions, definition of done |
+| [Operations guide](docs/operations.md) | Operators, DevOps | Production checklist, secrets, monitoring, backups, upgrades |
 
-Interactive API documentation is served at `/swagger-ui.html` in the `local` and `dev` profiles.
-
----
+When the backend runs in the `local` or `dev` profile, the interactive API description is
+available at <http://localhost:8080/swagger-ui.html>.
 
 ## Quick start
 
+Requires JDK 21, Maven 3.9+ and Docker.
+
 ```bash
-# 1. Start a MariaDB instance
-docker run -d --name design-db -p 3306:3306 \
-  -e MARIADB_DATABASE=design_backend \
-  -e MARIADB_USER=design \
-  -e MARIADB_PASSWORD=design \
-  -e MARIADB_ROOT_PASSWORD=root \
-  mariadb:11
+# 1. Start PostgreSQL
+docker run -d --name design-db -p 5432:5432 \
+  -e POSTGRES_DB=design_backend \
+  -e POSTGRES_USER=design \
+  -e POSTGRES_PASSWORD=design \
+  postgres:18
 
-# 2. Run the backend (profile "local" is the default)
+# 2. Start the backend (profile "local")
 mvn spring-boot:run
-
-# 3. Log in as the bootstrap admin
-curl -s -X POST http://localhost:8080/oauth2/user/token \
-  -d grant_type=password \
-  -d username=admin@design.local \
-  -d 'password=Admin123!'
-
-# 4. Open Swagger UI
-open http://localhost:8080/swagger-ui.html
 ```
 
-> ⚠️ `admin@design.local` / `Admin123!` is a **well-known default** for development only.
-> The `prod` profile does not create this account unless `ADMIN_INIT_ENABLED=true`. Set
-> `ADMIN_EMAIL` and `ADMIN_PASSWORD` in every shared environment. See the [security checklist](docs/operations.md#security-checklist-for-production).
+On first start, Flyway creates the schema, and a default admin `admin@design.local` with the
+password `Admin123!` is created. Try it:
 
----
+```bash
+curl -X POST http://localhost:8080/oauth2/user/token \
+  -d grant_type=password -d username=admin@design.local -d 'password=Admin123!'
+```
+
+> [!WARNING]
+> The default admin credentials are for local development only. The `prod` profile does not
+> create this account unless `ADMIN_INIT_ENABLED=true`. See the
+> [production checklist](docs/operations.md#production-checklist).
 
 ## Installation
 
@@ -75,98 +82,88 @@ open http://localhost:8080/swagger-ui.html
 | Tool | Version | Notes |
 |---|---|---|
 | JDK | 21 | Temurin recommended |
-| Maven | 3.9+ | The repository has **no Maven wrapper** (`.mvn/` is git-ignored), so install Maven yourself |
-| MariaDB | 10.6+ / 11.x | MySQL may work via the MariaDB driver but is not tested |
-| Docker | optional | For the container build and for running MariaDB locally |
-| SMTP account | optional | Only needed when `MAIL_ENABLED=true` |
+| Maven | 3.9 or later | No Maven wrapper is included |
+| PostgreSQL | 15 or later | Tested with 18 |
+| Docker | Current | Optional: local PostgreSQL, container build, migration test |
+| SMTP account | – | Optional; required for registration e-mails (`MAIL_ENABLED=true`) |
 
-### Run locally with Maven
+### Run from source
 
-1. **Create the database and user** (skip this if you used the Docker command in Quick start):
+1. **Create the database and user** (not needed if you used the Docker command above):
 
    ```sql
-   CREATE DATABASE design_backend CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-   CREATE USER 'design'@'%' IDENTIFIED BY 'design';
-   GRANT ALL PRIVILEGES ON design_backend.* TO 'design'@'%';
+   CREATE ROLE design LOGIN PASSWORD 'design';
+   CREATE DATABASE design_backend OWNER design;
    ```
 
-2. **Configure the environment.** Copy `.env.example` to `.env` and adjust it. Spring Boot does
-   **not** read `.env` files on its own, so export the variables in your shell or IDE run
-   configuration:
+2. **Configure the environment** (optional; the defaults match step 1). Spring Boot does not read
+   `.env` files, so export the variables in your shell or IDE:
 
    ```bash
-   cp .env.example .env
+   cp .env.example .env    # adjust; note that DB_PASSWORD there is "design_password"
    set -a; source .env; set +a
    ```
 
-3. **Build and test:**
+3. **Build and test.** Unit and integration tests use an in-memory H2 database. The PostgreSQL
+   migration test runs only when Docker is available.
 
    ```bash
    mvn clean verify
    ```
 
-   Tests use an in-memory H2 database, so the build needs no MariaDB.
-
 4. **Run:**
 
    ```bash
-   mvn spring-boot:run
-   # or
    java -jar target/design-daas-backend-2.0.0.jar
    ```
 
-   On first start the application:
-   - runs the Flyway migrations `V1`–`V4` against the database,
-   - generates an RSA-2048 signing key at `${OAUTH_KEYS_DIR}/rsa-jwk.json` (default `./keys`),
-     with file mode 600 on POSIX systems,
-   - creates the default admin account if `ADMIN_INIT_ENABLED` is true (the default outside
-     `prod`) and the e-mail does not exist yet.
+On startup the service:
 
-### Run with Docker
+- applies the Flyway migrations,
+- creates the JWT signing key `rsa-jwk.json` in `OAUTH_KEYS_DIR` if it does not exist yet, and
+- creates the default admin, if enabled and the e-mail address is not taken.
 
-The `Dockerfile` is a two-stage build: Maven builds the jar, then the jar runs on a JRE 21 Alpine
-image.
+### Run as a container
 
 ```bash
 docker build -t design-daas-backend:2.0.0 .
 
 docker run -d --name design-backend -p 8080:8080 \
   -e SPRING_PROFILES_ACTIVE=prod \
-  -e DB_URL=jdbc:mariadb://design-db:3306/design_backend \
-  -e DB_USERNAME=design -e DB_PASSWORD=design \
+  -e DB_URL=jdbc:postgresql://<db-host>:5432/design_backend \
+  -e DB_USERNAME=design -e DB_PASSWORD='<db-password>' \
   -e OAUTH_ISSUER=https://api.example.org \
-  -e ADMIN_INIT_ENABLED=true -e ADMIN_PASSWORD='<strong-secret>' \
   -e FRONTEND_URL=https://app.example.org \
+  -e ADMIN_INIT_ENABLED=true -e ADMIN_EMAIL=admin@example.org -e ADMIN_PASSWORD='<strong-password>' \
   -v design-keys:/app/keys \
   design-daas-backend:2.0.0
 ```
 
-> In `prod` the bootstrap admin is only created when `ADMIN_INIT_ENABLED=true`. Enable it for the
-> first start with a strong `ADMIN_PASSWORD`, then remove the variable.
+Remove `ADMIN_INIT_ENABLED` after the first start.
 
-> **Mount `/app/keys` on a persistent volume.** If the signing key is lost (for example, the
-> container is recreated without a volume), every issued token becomes invalid and all users
-> must log in again. Every replica must use the **same** key file.
+> [!IMPORTANT]
+> Keep `/app/keys` on a persistent volume. If the signing key is lost, every issued token becomes
+> invalid. All instances must share the same key.
 
-A minimal `docker-compose.yml` for local development (not part of the repository):
+<details>
+<summary>Example <code>docker-compose.yml</code> for local development</summary>
 
 ```yaml
 services:
   db:
-    image: mariadb:11
+    image: postgres:18
     environment:
-      MARIADB_DATABASE: design_backend
-      MARIADB_USER: design
-      MARIADB_PASSWORD: design
-      MARIADB_ROOT_PASSWORD: root
-    ports: ["3306:3306"]
-    volumes: [db-data:/var/lib/mysql]
+      POSTGRES_DB: design_backend
+      POSTGRES_USER: design
+      POSTGRES_PASSWORD: design
+    ports: ["5432:5432"]
+    volumes: [db-data:/var/lib/postgresql]
   backend:
     build: .
     depends_on: [db]
     ports: ["8080:8080"]
     environment:
-      DB_URL: jdbc:mariadb://db:3306/design_backend
+      DB_URL: jdbc:postgresql://db:5432/design_backend
       DB_USERNAME: design
       DB_PASSWORD: design
       SPRING_PROFILES_ACTIVE: dev
@@ -176,48 +173,83 @@ volumes:
   keys:
 ```
 
-### Configuration reference
+</details>
 
-All settings live in `src/main/resources/application.yml` and can be overridden with environment
+## Configuration
+
+All settings are in `src/main/resources/application.yml` and can be overridden with environment
 variables.
 
-| Env variable | Default | Purpose |
+| Variable | Default | Description |
 |---|---|---|
-| `SPRING_PROFILES_ACTIVE` | `local` | `local`, `dev` or `prod` (see below) |
-| `DB_URL` | `jdbc:mariadb://localhost:3306/design_backend` | JDBC URL |
-| `DB_USERNAME` / `DB_PASSWORD` | `design` / `design` | DB credentials |
-| `OAUTH_KEYS_DIR` | `./keys` | Directory holding `rsa-jwk.json` (the private signing key) |
-| `OAUTH_ISSUER` | `http://localhost:8080` | `iss` claim written into JWTs and **checked** on every request |
-| `OAUTH_ACCESS_TOKEN_TTL_SECONDS` | `3600` | Access token lifetime |
-| `OAUTH_REFRESH_TOKEN_TTL_DAYS` | `30` | Refresh token lifetime |
-| `ADMIN_INIT_ENABLED` | `true` (`false` in `prod`) | Create the bootstrap admin at startup if the e-mail does not exist |
-| `ADMIN_EMAIL` | `admin@design.local` | Bootstrap admin e-mail |
-| `ADMIN_PASSWORD` | `Admin123!` | Bootstrap admin password, **change it** |
-| `MAIL_ENABLED` | `false` | If false, no mail is sent (codes are only logged at DEBUG) |
-| `MAIL_HOST` / `MAIL_PORT` | `smtp.gmail.com` / `587` | SMTP server |
-| `MAIL_USERNAME` / `MAIL_PASSWORD` | empty | SMTP credentials (for Gmail, an App Password) |
-| `MAIL_FROM` | `noreply@design.local` | Sender, and recipient of application-access request mails |
+| `SPRING_PROFILES_ACTIVE` | `local` | `local`, `dev` or `prod` |
+| `DB_URL` | `jdbc:postgresql://localhost:5432/design_backend` | JDBC URL |
+| `DB_USERNAME`, `DB_PASSWORD` | `design`, `design` | Database credentials |
+| `OAUTH_ISSUER` | `http://localhost:8080` | `iss` claim of issued tokens; checked on every request |
+| `OAUTH_KEYS_DIR` | `./keys` | Directory of the signing key `rsa-jwk.json` |
+| `OAUTH_ACCESS_TOKEN_TTL_SECONDS` | `3600` | Access-token lifetime |
+| `OAUTH_REFRESH_TOKEN_TTL_DAYS` | `30` | Refresh-token lifetime |
+| `ADMIN_INIT_ENABLED` | `true` (`false` in `prod`) | Create the default admin at startup |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | `admin@design.local`, `Admin123!` | Default admin credentials. **Change them** |
+| `MAIL_ENABLED` | `false` | Send e-mails. If `false`, registration codes are only logged at `DEBUG` |
+| `MAIL_HOST`, `MAIL_PORT` | `smtp.gmail.com`, `587` | SMTP server (STARTTLS) |
+| `MAIL_USERNAME`, `MAIL_PASSWORD` | empty | SMTP credentials |
+| `MAIL_FROM` | `noreply@design.local` | Sender address; also receives application-access requests |
 | `FRONTEND_URL` | `http://localhost:3000` | Frontend origin |
-| `CORS_ALLOWED_ORIGINS` | `${FRONTEND_URL}` | Comma-separated exact origins |
-| `RATE_LIMITING_ENABLED` | `true` | IP-based rate limiting on public endpoints |
-| `RATE_LIMIT_AUTH_TOKEN` | `20` | req/min/IP on `POST /oauth2/user/token` |
-| `RATE_LIMIT_REGISTER` | `5` | req/min/IP on `POST /user` |
-| `RATE_LIMIT_VALIDATE_EMAIL` | `10` | req/min/IP on `POST /user/validate_email` |
-| `RATE_LIMIT_RESEND_CODE` | `3` | req/min/IP on `POST /user/resend_code` |
-| `RATE_LIMIT_TRUSTED_PROXIES` | `127.0.0.1/32,::1/128` | CIDRs whose `X-Forwarded-For` header is trusted |
+| `CORS_ALLOWED_ORIGINS` | value of `FRONTEND_URL` | Comma-separated list of exact origins |
+| `RATE_LIMITING_ENABLED` | `true` | Per-IP rate limiting on the public endpoints |
+| `RATE_LIMIT_AUTH_TOKEN` | `20` | Requests per minute on `POST /oauth2/user/token` |
+| `RATE_LIMIT_REGISTER` | `5` | Requests per minute on `POST /user` |
+| `RATE_LIMIT_VALIDATE_EMAIL` | `10` | Requests per minute on `POST /user/validate_email` |
+| `RATE_LIMIT_RESEND_CODE` | `3` | Requests per minute on `POST /user/resend_code` |
+| `RATE_LIMIT_TRUSTED_PROXIES` | `127.0.0.1/32,::1/128` | Proxies whose `X-Forwarded-For` header is trusted |
 
-Other properties that have no environment variable:
+Properties without a dedicated environment variable. Set them in a profile file or on the command
+line, for example `--app.token.cleanup.cron="0 0 4 * * *"`:
 
-| Property | Default | Purpose |
+| Property | Default | Description |
 |---|---|---|
-| `app.token.cleanup.cron` | `0 0 3 * * *` | When expired tokens are purged (JVM time zone) |
-| `app.security.swagger-public` | `false` (`true` in `local`/`dev`) | Swagger UI without authentication |
+| `app.token.cleanup.cron` | `0 0 3 * * *` | Schedule of the expired-token cleanup (JVM time zone) |
+| `app.rate-limiting.eviction-interval-ms` | `300000` | How often idle rate-limit buckets are removed |
+| `app.security.swagger-public` | `false` (`true` in `local` and `dev`) | Serve Swagger UI without authentication |
 
-### Spring profiles
+### Profiles
 
-| Profile | Effect |
+| Profile | Behaviour |
 |---|---|
-| `local` (default) | Swagger UI and `/v3/api-docs` are public |
-| `dev` | Same as `local` |
-| `prod` | Swagger UI and API docs are **disabled** entirely; the bootstrap admin is **not** created unless `ADMIN_INIT_ENABLED=true` |
-| `test` (tests only) | H2 in MySQL mode, Flyway off, `ddl-auto=create-drop`, rate limiting off, keys in `./test-keys` |
+| `local` (default), `dev` | Swagger UI and `/v3/api-docs` are public |
+| `prod` | Swagger UI and the API description are disabled; the default admin is created only when `ADMIN_INIT_ENABLED=true` |
+| `test` | Used by the test suite: H2, Flyway off, rate limiting off |
+
+## Security
+
+- Passwords are stored only as BCrypt hashes. Tokens are signed with a private RSA key that the
+  service creates on first start; keep it secret and back it up.
+- Every request is checked against the database, so logout, disabling and password changes take
+  effect immediately.
+- Report suspected vulnerabilities privately to the project maintainers, not in a public issue.
+
+See [Security in arc42](docs/arc42.md#81-security) for the threat overview and
+[Data protection](docs/arc42.md#86-data-protection) for the personal data that is stored.
+
+## Known limitations
+
+- Admins cannot change their own password through the API, and locked accounts cannot be unlocked
+  early through it. The [Operations guide](docs/operations.md#administrative-tasks) describes
+  the workarounds.
+- Rate limits are kept in memory, per instance.
+- The full, prioritised list is in [Risks and technical debt](docs/arc42.md#11-risks-and-technical-debt).
+
+## Contributing
+
+Read the [Developer guide](docs/development.md) before opening a pull request. A change is
+complete when `mvn verify` passes and the code, tests, documentation and `CHANGELOG.md` are
+updated together (see the [definition of done](docs/development.md#definition-of-done)).
+
+## Related repositories
+
+| Repository | Role |
+|---|---|
+| `design-daas` | DaaS application; calls the permission check |
+| `design-daas-application-frontend` | Web frontend |
+| `design-daas-e2e` | End-to-end tests of the whole system (Playwright) |

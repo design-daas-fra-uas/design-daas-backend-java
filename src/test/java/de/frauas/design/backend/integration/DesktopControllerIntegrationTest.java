@@ -13,6 +13,7 @@ import java.util.Map;
 import static de.frauas.design.backend.integration.MockJwt.adminJwt;
 import static de.frauas.design.backend.integration.MockJwt.userJwt;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -123,5 +124,25 @@ class DesktopControllerIntegrationTest extends BaseIntegrationTest {
         mockMvc.perform(get("/desktop/" + createdDesktopId).with(adminJwt(999)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(createdDesktopId));
+    }
+
+    @Test
+    @Order(9)
+    @DisplayName("DELETE /desktop/{id} – user JWT returns 403")
+    void deleteDesktop_userJwt_returns403() throws Exception {
+        assertNotNull(createdDesktopId, "Desktop creation test did not produce an ID");
+        mockMvc.perform(delete("/desktop/" + createdDesktopId).with(userJwt(1))).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @Order(10)
+    @DisplayName("DELETE /desktop/{id} – deletes the desktop, second call returns 404")
+    void deleteDesktop_adminJwt_returns204ThenNotFound() throws Exception {
+        assertNotNull(createdDesktopId, "Desktop creation test did not produce an ID");
+        mockMvc.perform(delete("/desktop/" + createdDesktopId).with(adminJwt(999)))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(get("/desktop/" + createdDesktopId).with(adminJwt(999))).andExpect(status().isNotFound());
+        mockMvc.perform(delete("/desktop/" + createdDesktopId).with(adminJwt(999)))
+                .andExpect(status().isNotFound());
     }
 }

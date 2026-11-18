@@ -79,10 +79,10 @@
             <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
 
-        <!-- MariaDB Driver -->
+        <!-- PostgreSQL Driver -->
         <dependency>
-            <groupId>org.mariadb.jdbc</groupId>
-            <artifactId>mariadb-java-client</artifactId>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
         </dependency>
 
         <!-- Flyway Spring Boot 4.x autoconfiguration module -->
@@ -91,10 +91,10 @@
             <artifactId>spring-boot-flyway</artifactId>
         </dependency>
 
-        <!-- Flyway MySQL/MariaDB dialect support -->
+        <!-- Flyway PostgreSQL support -->
         <dependency>
             <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-mysql</artifactId>
+            <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
 
         <!-- OpenAPI / Swagger UI (springdoc 3.x targets Spring Boot 4.x) -->
@@ -128,7 +128,7 @@
             <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Testcontainers: runs the real Flyway migrations against MariaDB (needs Docker,
+        <!-- Testcontainers: runs the real Flyway migrations against PostgreSQL (needs Docker,
              skipped without it) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -142,7 +142,7 @@
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>testcontainers-mariadb</artifactId>
+            <artifactId>testcontainers-postgresql</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- ArchUnit for architecture tests -->

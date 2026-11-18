@@ -1,0 +1,8 @@
+flowchart LR
+    browser[Browser] -->|"HTTPS :8443 /auth/"| nginx[nginx]
+    nginx -->|"HTTP 127.0.0.1:8080"| backend[daas-auth container]
+    daas[DaaS backend] -->|"HTTP 127.0.0.1:8080"| backend
+    backend -->|"127.0.0.1:5432 (host network)"| db[(daas-0-postgres<br/>PostgreSQL 18<br/>database design_backend)]
+    daas -->|"127.0.0.1:5432, database mergedb"| db
+    backend --- keys[(volume keys)]
+    db --- data[(src/data/db/postgres)]

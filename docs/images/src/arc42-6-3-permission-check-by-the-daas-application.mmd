@@ -1,0 +1,17 @@
+sequenceDiagram
+    autonumber
+    participant D as DaaS application
+    participant P as PermissionService
+    participant DB as PostgreSQL
+    D->>P: GET /permissions/{function}/{userId} (admin token)
+    P->>DB: load account
+    alt unknown account
+        P-->>D: deny
+    else admin
+        P-->>D: allow
+    else regular user
+        loop steps 1 to 4, until a step has a match
+            P->>DB: rules of this step for user or groups and function
+        end
+        P-->>D: decision of the first matching step, otherwise deny
+    end

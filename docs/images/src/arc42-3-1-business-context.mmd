@@ -1,0 +1,7 @@
+flowchart LR
+    user([User / Admin]) -->|browser| fe[Frontend<br/>design-daas-application-frontend]
+    fe -->|REST, Bearer JWT| be[[DESIGN DaaS backend]]
+    daas[DaaS application<br/>design-daas] -->|permission check| be
+    be -->|SMTP| mail[Mail server]
+    mail -->|registration code,<br/>deletion notice,<br/>access request| user
+    be -->|JDBC| db[(PostgreSQL)]

@@ -1,0 +1,20 @@
+flowchart TB
+    subgraph app [de.frauas.design.backend]
+        auth[auth<br/>tokens, session, revocation]
+        user[user<br/>users, admins, user groups, mail]
+        desktop[desktop<br/>desktops, desktop groups]
+        permission[permission<br/>check and management]
+        shared[shared<br/>errors, events, rate limiting,<br/>request ids, utilities]
+        config[config<br/>security, JWT keys, CORS,<br/>OpenAPI, async, properties]
+        bootstrap[bootstrap<br/>default admin]
+    end
+    auth --> user
+    user --> auth
+    user --> desktop
+    desktop --> user
+    permission --> user
+    permission --> auth
+    config --> auth
+    config --> user
+    bootstrap --> user
+    auth & user & desktop & permission --> shared

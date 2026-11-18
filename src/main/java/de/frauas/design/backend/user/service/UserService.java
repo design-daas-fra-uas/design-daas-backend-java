@@ -1,6 +1,7 @@
 package de.frauas.design.backend.user.service;
 
 import de.frauas.design.backend.shared.event.UserSessionsInvalidatedEvent;
+import de.frauas.design.backend.shared.util.AfterCommit;
 import de.frauas.design.backend.shared.util.LogMasking;
 import de.frauas.design.backend.user.dto.CreateUserRequest;
 import de.frauas.design.backend.user.dto.PatchUserRequest;
@@ -18,8 +19,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -84,7 +83,7 @@ public class UserService {
         log.info("createUser — user created id={} email={}", user.getId(), LogMasking.maskEmail(user.getEmail()));
         String email = user.getEmail();
         String registrationCode = user.getRegistrationCode();
-        runAfterCommit(
+        AfterCommit.run(
                 () -> mailService.sendRegistrationCode(email, registrationCode, REGISTRATION_CODE_TIMEOUT_HOURS));
         return UserDto.from(user);
     }
@@ -144,7 +143,7 @@ public class UserService {
         userRepository.save(user);
         String address = user.getEmail();
         String code = user.getRegistrationCode();
-        runAfterCommit(() -> mailService.sendRegistrationCode(address, code, REGISTRATION_CODE_TIMEOUT_HOURS));
+        AfterCommit.run(() -> mailService.sendRegistrationCode(address, code, REGISTRATION_CODE_TIMEOUT_HOURS));
         log.info("resendRegistrationCode — new code issued userId={}", user.getId());
     }
 
@@ -157,6 +156,19 @@ public class UserService {
     public List<UserDto> getAllUsers() {
         log.debug("getAllUsers — no pagination");
         return userRepository.findAllUsers().stream().map(UserDto::from).toList();
+    }
+
+    /**
+     * Looks up a single regular user by ID.
+     *
+     * @param id the ID of the user
+     * @return the matching user
+     * @throws UserNotFoundException if no user exists with the given id
+     */
+    @Transactional(readOnly = true)
+    public UserDto getUserById(Integer id) {
+        log.info("getUserById — id={}", id);
+        return UserDto.from(getUserOrThrow(id));
     }
 
     /**
@@ -231,6 +243,28 @@ public class UserService {
     }
 
     /**
+     * Permanently deletes a user and e-mails them that their account is gone.
+     *
+     * <p>Group memberships are removed by Hibernate (the user owns that join table). The
+     * user's tokens and permission rules are removed by the {@code ON DELETE CASCADE}
+     * foreign keys in the schema; any token still in flight is rejected by
+     * {@code TokenRevocationValidator} because its user no longer exists.</p>
+     *
+     * @param id the ID of the user to delete
+     * @throws UserNotFoundException if no user exists with the given id
+     */
+    @Transactional
+    public void deleteUser(Integer id) {
+        log.debug("deleteUser — id={}", id);
+        User user = getUserOrThrow(id);
+        String email = user.getEmail();
+        String name = user.getName();
+        userRepository.delete(user);
+        AfterCommit.run(() -> mailService.sendAccountDeletedEmail(email, name));
+        log.info("deleteUser — user deleted id={} email={}", id, LogMasking.maskEmail(email));
+    }
+
+    /**
      * Sends an application-request email on behalf of the authenticated user.
      * Mirrors PHP UserService::requestApplication().
      *
@@ -245,7 +279,7 @@ public class UserService {
         String email = baseUser.getEmail();
         String name = baseUser.getName();
         String id = String.valueOf(baseUser.getId());
-        runAfterCommit(() -> mailService.sendApplicationRequestEmail(email, name, id, application));
+        AfterCommit.run(() -> mailService.sendApplicationRequestEmail(email, name, id, application));
         log.info("requestApplication — email sent for userId={} application={}", userId, application);
     }
 
@@ -274,26 +308,6 @@ public class UserService {
             throw new IllegalArgumentException("Unknown user group ids: " + missingIds);
         }
         return groups;
-    }
-
-    /**
-     * Runs {@code action} once the current transaction commits, so slow I/O (e.g. SMTP
-     * sends) never keeps database locks held longer than necessary. Falls back to running
-     * immediately if no transaction is active (e.g. during tests).
-     *
-     * @param action the work to defer until after commit
-     */
-    private void runAfterCommit(Runnable action) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    action.run();
-                }
-            });
-        } else {
-            action.run();
-        }
     }
 
     private void issueRegistrationCode(User user) {

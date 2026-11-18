@@ -2,8 +2,10 @@ package de.frauas.design.backend.shared;
 
 import de.frauas.design.backend.shared.dto.ErrorResponse;
 import de.frauas.design.backend.shared.exception.ConflictException;
+import de.frauas.design.backend.shared.logging.RequestIdFilter;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.constraints.NotBlank;
@@ -73,6 +75,20 @@ class GlobalExceptionHandlerTest {
         assertThat(resp.getBody().getMessage()).contains("Support reference:");
         // Must NOT leak the raw exception detail to the caller (SEC-M2)
         assertThat(resp.getBody().getMessage()).doesNotContain("something blew up");
+    }
+
+    @Test
+    @DisplayName("handleGeneric uses the request id as support reference when one is set")
+    void handleGeneric_usesRequestId() {
+        MDC.put(RequestIdFilter.MDC_KEY, "req-123");
+        try {
+            ResponseEntity<ErrorResponse> resp = handler.handleGeneric(new RuntimeException("boom"));
+
+            assertThat(resp.getBody()).isNotNull();
+            assertThat(resp.getBody().getMessage()).endsWith("Support reference: req-123");
+        } finally {
+            MDC.remove(RequestIdFilter.MDC_KEY);
+        }
     }
 
     @Test

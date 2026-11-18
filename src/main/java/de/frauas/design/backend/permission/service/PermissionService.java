@@ -9,6 +9,7 @@ import de.frauas.design.backend.permission.repository.EndpointGroupUserAccessRep
 import de.frauas.design.backend.permission.repository.EndpointGroupUserGroupAccessRepository;
 import de.frauas.design.backend.permission.repository.EndpointUserAccessRepository;
 import de.frauas.design.backend.permission.repository.EndpointUserGroupAccessRepository;
+import de.frauas.design.backend.user.model.Admin;
 import de.frauas.design.backend.user.model.BaseUser;
 import de.frauas.design.backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,9 @@ import java.util.function.Supplier;
  * rule categories while remaining fail-closed for ambiguous data.</p>
  *
  * <p>Default: <b>DENY</b> — if no rule matches at any step, access is denied.
+ *
+ * <p>Admins skip the cascade and are always allowed: they manage the platform, and without this
+ * an empty rule table would lock them out the moment design-daas switches the check on.</p>
  */
 @Slf4j
 @Service
@@ -69,7 +73,7 @@ public class PermissionService {
     public PermissionResultDto checkPermission(Integer userId, String functionName) {
         log.debug("checkPermission — userId={} functionName={}", userId, functionName);
 
-        if (userId == null || functionName == null || functionName.isBlank()) {
+        if (isInvalidInput(userId, functionName)) {
             log.warn(
                     "checkPermission — invalid input (userId={}, functionName={}), defaulting to deny",
                     userId,
@@ -86,17 +90,11 @@ public class PermissionService {
         }
 
         String userName = user.map(BaseUser::getName).orElse(UNKNOWN_USER_NAME);
-        Supplier<List<Integer>> groupIdsSupplier = new Supplier<>() {
-            private List<Integer> cachedGroupIds;
-
-            @Override
-            public List<Integer> get() {
-                if (cachedGroupIds == null) {
-                    cachedGroupIds = userRepository.findGroupIdsByUserId(userId);
-                }
-                return cachedGroupIds;
-            }
-        };
+        if (user.get() instanceof Admin) {
+            log.info("checkPermission — userId={} is an admin, allowing fn={}", userId, functionName);
+            return PermissionResultDto.allow(userId, userName);
+        }
+        Supplier<List<Integer>> groupIdsSupplier = cachedGroupIds(userId);
 
         Optional<Boolean> allow = checkDirectUserRule(userId, functionName)
                 .or(() -> checkUserGroupRule(groupIdsSupplier.get(), functionName))
@@ -110,6 +108,28 @@ public class PermissionService {
 
         log.info("checkPermission — userId={} fn={} result={}", userId, functionName, allow.get() ? "allow" : "deny");
         return toResult(allow.get(), userId, userName);
+    }
+
+    private static boolean isInvalidInput(Integer userId, String functionName) {
+        return userId == null || functionName == null || functionName.isBlank();
+    }
+
+    /**
+     * Returns a supplier that loads the user's group ids on first use and caches them, so
+     * steps 2 and 4 share one query and steps 1 and 3 can decide without any.
+     */
+    private Supplier<List<Integer>> cachedGroupIds(Integer userId) {
+        return new Supplier<>() {
+            private List<Integer> groupIds;
+
+            @Override
+            public List<Integer> get() {
+                if (groupIds == null) {
+                    groupIds = userRepository.findGroupIdsByUserId(userId);
+                }
+                return groupIds;
+            }
+        };
     }
 
     /** Step 1: direct user → endpoint rule. */

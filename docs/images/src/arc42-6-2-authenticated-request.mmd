@@ -1,0 +1,14 @@
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant F as Bearer token filter
+    participant V as TokenRevocationValidator
+    participant Ctl as Controller
+    C->>F: request with Authorization: Bearer JWT
+    F->>F: verify RS256 signature, exp, iss
+    F->>V: validate(jwt)
+    V->>V: jti known and not revoked?
+    V->>V: account exists and enabled?
+    V-->>F: valid / 401
+    F->>Ctl: authority SCOPE_user or SCOPE_admin
+    Ctl-->>C: 200, or 403 if @PreAuthorize fails

@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -88,5 +89,24 @@ public class DesktopGroupController {
         log.info("POST /desktop_group/{}/user_group/{} — association created", id, userGroupId);
 
         return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
+    /**
+     * Permanently deletes a desktop group; its desktops and the user groups linked to it are kept.
+     *
+     * @param id the desktop group ID
+     * @return 204 No Content
+     * @throws DesktopGroupNotFoundException if no desktop group exists with the given id (404)
+     */
+    @DeleteMapping("/desktop_group/{id}")
+    public ResponseEntity<Void> deleteDesktopGroup(@PathVariable Integer id) {
+
+        log.info("DELETE /desktop_group/{} — deleting desktop group", id);
+
+        desktopService.deleteDesktopGroup(id);
+
+        log.info("DELETE /desktop_group/{} — desktop group deleted", id);
+
+        return ResponseEntity.noContent().build();
     }
 }

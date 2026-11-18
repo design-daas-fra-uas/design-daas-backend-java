@@ -1,153 +1,200 @@
-[README](../README.md) · [User manual](user-manual.md) · [API](api.md) · [Database](database.md) · [Architecture (arc42)](arc42.md) · [Development](development.md) · [Operations](operations.md)
-
 # Database
 
-- **Engine:** MariaDB with the InnoDB storage engine.
-- **Migrations:** Flyway, `src/main/resources/db/migration`. Hibernate only *validates* the
-  schema (`ddl-auto: validate`), so **every schema change needs a new `V<n>__*.sql` file.**
-- **Time:** all timestamps are stored as UTC `Instant`s (`TIMESTAMP(6)`), and the app clock is
-  `Clock.systemUTC()`.
+> **Audience:** developers and database administrators
+> **Last reviewed:** 2026-11-13 · [Documentation index](../README.md#documentation)
+
+## In short
+
+- All data lives in one PostgreSQL database with 16 tables, in four areas: accounts, desktops,
+  permissions and login tokens.
+- The structure of the tables is created and changed only by numbered SQL scripts (Flyway
+  migrations), never by hand.
+- Deleting a record also removes everything that belongs only to it, for example a user's tokens.
+- Admins always pass the permission check. For regular users, rules are checked in four steps, and
+  the answer is "deny" when no rule matches.
+
+## Contents
+
+- [Overview](#overview)
+- [Migration history](#migration-history)
+- [Entity-relationship diagram](#entity-relationship-diagram)
+- [Tables](#tables)
+- [Column reference](#column-reference)
+- [Useful queries](#useful-queries)
+- [Deletion behaviour](#deletion-behaviour)
+- [Permission resolution](#permission-resolution)
+- [Working with the schema](#working-with-the-schema)
+
+## Overview
+
+| Aspect | Decision | In plain words |
+|---|---|---|
+| Engine | PostgreSQL 15 or later (tested with 18) | – |
+| Schema ownership | Flyway migrations in `src/main/resources/db/migration`; Hibernate only validates (`ddl-auto: validate`) | Flyway runs the SQL scripts in order at startup. The application then checks that the tables match the Java classes and refuses to start if they do not |
+| Time values | `TIMESTAMPTZ(6)`, mapped to `java.time.Instant` | All times are stored as points in time (UTC), independent of the server's time zone |
+| Inheritance | Single-table inheritance on `users`, discriminator column `role` | Users and admins are stored in the same table; the `role` column tells them apart |
+| Referential integrity | Every foreign key uses `ON DELETE CASCADE` | When a row is deleted, the database also deletes the rows that point to it |
 
 ## Migration history
 
-| Version | Change |
-|---|---|
-| V1 | Initial schema (users, groups, desktops, permissions, tokens) |
-| V2 | `registration_code_timeout` and `registration_used_moment` changed to `TIMESTAMP(6)` (UTC) |
-| V3 | Dropped `desktops.name`; desktops are identified by `description` |
-| V4 | Dropped `desktop_groups.name`; `description` is now `NOT NULL UNIQUE`. Fails if duplicate or empty descriptions exist, so clean those up first |
+| Version | File | Change |
+|---|---|---|
+| V1 | `V1__init.sql` | The whole schema: accounts, groups, desktops, permissions and tokens |
+
+Until 2026-11-17 the service ran on MariaDB with five migrations (V1–V5, see git history). On the
+move to PostgreSQL they were replaced by one script that creates the same final schema, and the
+data was copied over.
 
 ## Entity-relationship diagram
 
-```mermaid
-erDiagram
-    users {
-        INT id PK
-        VARCHAR role "discriminator: admin | user"
-        VARCHAR name
-        VARCHAR email UK
-        VARCHAR password "BCrypt(12)"
-        BOOLEAN enabled
-        VARCHAR registration_code
-        TIMESTAMP registration_code_timeout
-        TIMESTAMP registration_used_moment
-        INT failed_login_attempts
-        TIMESTAMP locked_until
-    }
-    user_groups {
-        INT id PK
-        VARCHAR name UK
-        VARCHAR description
-    }
-    desktops {
-        INT id PK
-        VARCHAR description
-    }
-    desktop_groups {
-        INT id PK
-        VARCHAR description UK
-    }
-    endpoints {
-        INT id PK
-        VARCHAR function_name UK
-        VARCHAR description
-    }
-    endpoint_groups {
-        INT id PK
-        VARCHAR name UK
-        VARCHAR description
-    }
-    access_tokens {
-        BIGINT id PK
-        VARCHAR jti UK
-        INT user_id FK
-        VARCHAR scope
-        TIMESTAMP issued_at
-        TIMESTAMP expires_at
-        BOOLEAN revoked
-        TIMESTAMP revoked_at
-    }
-    refresh_tokens {
-        BIGINT id PK
-        VARCHAR token_value UK
-        INT user_id FK
-        VARCHAR scope
-        TIMESTAMP created_at
-        TIMESTAMP expires_at
-        BOOLEAN revoked
-        TIMESTAMP revoked_at
-    }
+![Entity-relationship diagram of the database](images/database-entity-relationship-diagram.png)
 
-    users ||--o{ users_to_user_groups : ""
-    user_groups ||--o{ users_to_user_groups : ""
-    desktops ||--o{ desktops_to_desktop_groups : ""
-    desktop_groups ||--o{ desktops_to_desktop_groups : ""
-    user_groups ||--o{ user_group_to_desktop_group : ""
-    desktop_groups ||--o{ user_group_to_desktop_group : ""
-    endpoint_groups ||--o{ endpoint_group_members : ""
-    endpoints ||--o{ endpoint_group_members : ""
+*Source: [`images/src/database-entity-relationship-diagram.mmd`](images/src/database-entity-relationship-diagram.mmd)*
 
-    users ||--o{ endpoint_user_access : "step 1"
-    endpoints ||--o{ endpoint_user_access : ""
-    user_groups ||--o{ endpoint_user_group_access : "step 2"
-    endpoints ||--o{ endpoint_user_group_access : ""
-    users ||--o{ endpoint_group_user_access : "step 3"
-    endpoint_groups ||--o{ endpoint_group_user_access : ""
-    user_groups ||--o{ endpoint_group_user_group_access : "step 4"
-    endpoint_groups ||--o{ endpoint_group_user_group_access : ""
+The many-to-many relationships are labelled with their join tables. The numbers on the rule
+tables are the order in which the permission check evaluates them.
 
-    users ||--o{ access_tokens : ""
-    users ||--o{ refresh_tokens : ""
-```
+## Tables
 
-## Table overview
-
-| Group | Table | Purpose |
+| Area | Table | Purpose |
 |---|---|---|
-| Identity | `users` | All accounts. **Single-table inheritance**: `role` = `admin` → `Admin`, `user` → `User` |
-| | `user_groups` | Named groups of regular users |
-| | `users_to_user_groups` | m:n join (users ↔ user groups); admins have no groups |
-| Desktops | `desktops` | A virtual desktop |
-| | `desktop_groups` | Named collection of desktops (unique description) |
-| | `desktops_to_desktop_groups` | m:n join |
-| | `user_group_to_desktop_group` | m:n: which user group may use which desktop group |
-| Permissions | `endpoints` | A callable DESIGN DaaS function (`function_name`) |
-| | `endpoint_groups` + `endpoint_group_members` | Bundles of endpoints |
-| | `endpoint_user_access` | Rule: user → endpoint (allow/deny) |
-| | `endpoint_user_group_access` | Rule: user group → endpoint |
-| | `endpoint_group_user_access` | Rule: user → endpoint group |
-| | `endpoint_group_user_group_access` | Rule: user group → endpoint group |
-| Auth | `access_tokens` | One row per issued JWT (`jti`), for revocation |
-| | `refresh_tokens` | Opaque 256-bit refresh tokens |
+| Accounts | `users` | All accounts. `role = 'admin'` maps to `Admin`, `role = 'user'` to `User` |
+| | `user_groups` | Named groups of regular users, for example a course |
+| | `users_to_user_groups` | Membership (users ↔ user groups). Admins have no groups |
+| Desktops | `desktops` | One desktop offered to users |
+| | `desktop_groups` | A set of desktops that is granted as a whole; unique description |
+| | `desktops_to_desktop_groups` | Membership (desktops ↔ desktop groups) |
+| | `user_group_to_desktop_group` | Which user group may use which desktop group |
+| Permissions | `endpoints` | A DaaS-application function, identified by `function_name` |
+| | `endpoint_groups`, `endpoint_group_members` | Named bundles of endpoints |
+| | `endpoint_user_access` | Rule 1: user → endpoint |
+| | `endpoint_user_group_access` | Rule 2: user group → endpoint |
+| | `endpoint_group_user_access` | Rule 3: user → endpoint group |
+| | `endpoint_group_user_group_access` | Rule 4: user group → endpoint group |
+| Authentication | `access_tokens` | One row per issued JWT, keyed by its `jti`, for revocation |
+| | `refresh_tokens` | Opaque refresh tokens (256 bits, hex-encoded), single-use |
 
-All foreign keys use `ON DELETE CASCADE`: deleting a user removes their group memberships, rules
-and tokens.
+A scheduled job deletes expired rows from both token tables daily at 03:00 (JVM time zone).
+
+## Column reference
+
+Types are as created by `V1__init.sql`. "PK" is the primary key, "UK" a unique key and "FK"
+a foreign key (all foreign keys use `ON DELETE CASCADE`).
+
+### `users`
+
+| Column | Type | Null | Meaning |
+|---|---|---|---|
+| `id` | `INT GENERATED BY DEFAULT AS IDENTITY` | no | PK |
+| `role` | `VARCHAR(16)` | no | `admin` or `user`; decides the Java class |
+| `name` | `VARCHAR(255)` | no | Display name |
+| `email` | `VARCHAR(255)` | no | UK; also the login name |
+| `password` | `VARCHAR(255)` | no | BCrypt hash (strength 12), never the password itself |
+| `enabled` | `BOOLEAN` | no | `false` until the e-mail is verified, or when an admin disables the account |
+| `registration_code` | `VARCHAR(8)` | yes | Current verification code; cleared after verification |
+| `registration_code_timeout` | `TIMESTAMPTZ(6)` | yes | When the code expires (24 hours after it was issued) |
+| `registration_used_moment` | `TIMESTAMPTZ(6)` | yes | When the e-mail was verified |
+| `failed_login_attempts` | `INT` | no | Consecutive failed logins; reset by a successful login |
+| `locked_until` | `TIMESTAMPTZ(6)` | yes | Login blocked until this time |
+
+### Groups, desktops and their links
+
+| Table | Columns | Keys |
+|---|---|---|
+| `user_groups` | `id INT`, `name VARCHAR(255) NOT NULL`, `description VARCHAR(255)` | PK `id`; UK `name` |
+| `desktops` | `id INT`, `description VARCHAR(255)` | PK `id` |
+| `desktop_groups` | `id INT`, `description VARCHAR(255) NOT NULL` | PK `id`; UK `description` (`uq_desktop_groups_description`) |
+| `users_to_user_groups` | `user_id`, `user_group_id` | PK on both; FK to `users`, `user_groups` |
+| `desktops_to_desktop_groups` | `desktop_id`, `desktop_group_id` | PK on both; FK to `desktops`, `desktop_groups` |
+| `user_group_to_desktop_group` | `user_group_id`, `desktop_group_id` | PK on both; FK to `user_groups`, `desktop_groups` |
+
+### Permissions
+
+| Table | Columns | Keys |
+|---|---|---|
+| `endpoints` | `id INT`, `function_name VARCHAR(255) NOT NULL`, `description VARCHAR(255)` | PK `id`; UK `function_name` |
+| `endpoint_groups` | `id INT`, `name VARCHAR(255) NOT NULL`, `description VARCHAR(255)` | PK `id`; UK `name` |
+| `endpoint_group_members` | `endpoint_group_id`, `endpoint_id` | PK on both; FK to both tables |
+| `endpoint_user_access` | `id`, `user_id`, `endpoint_id`, `allow_access BOOLEAN` | PK `id`; UK (`user_id`, `endpoint_id`); FK to `users`, `endpoints` |
+| `endpoint_user_group_access` | `id`, `user_group_id`, `endpoint_id`, `allow_access` | PK `id`; UK (`user_group_id`, `endpoint_id`); FK to `user_groups`, `endpoints` |
+| `endpoint_group_user_access` | `id`, `user_id`, `endpoint_group_id`, `allow_access` | PK `id`; UK (`user_id`, `endpoint_group_id`); FK to `users`, `endpoint_groups` |
+| `endpoint_group_user_group_access` | `id`, `user_group_id`, `endpoint_group_id`, `allow_access` | PK `id`; UK (`user_group_id`, `endpoint_group_id`); FK to `user_groups`, `endpoint_groups` |
+
+### Tokens
+
+| Column | `access_tokens` | `refresh_tokens` |
+|---|---|---|
+| `id` | `BIGINT`, PK | `BIGINT`, PK |
+| Token identity | `jti VARCHAR(200)`, UK | `token_value VARCHAR(255)`, UK |
+| `user_id` | `INT`, FK to `users` | `INT`, FK to `users` |
+| `scope` | `VARCHAR(20)` | `VARCHAR(20)` |
+| Issued | `issued_at TIMESTAMPTZ(6)` | `created_at TIMESTAMPTZ(6)` |
+| `expires_at` | `TIMESTAMPTZ(6)` | `TIMESTAMPTZ(6)` |
+| `revoked`, `revoked_at` | `BOOLEAN`, `TIMESTAMPTZ(6)` | `BOOLEAN`, `TIMESTAMPTZ(6)` |
+| Extra indexes | `user_id`, `expires_at` | `user_id` |
+
+## Deletion behaviour
+
+| Deleted | Also removed | Kept |
+|---|---|---|
+| User or admin | Tokens, group memberships, rules with this user as subject | – |
+| User group | Memberships, desktop-group links, rules with this group as subject | The member accounts |
+| Desktop | Its desktop-group memberships | The desktop groups |
+| Desktop group | Its desktop memberships and user-group links | The desktops and user groups |
+| Endpoint | Rules that target it, its endpoint-group memberships | The endpoint groups |
+| Endpoint group | Rules that target it, its memberships | The endpoints |
+
+On PostgreSQL the cascading foreign keys guarantee this behaviour. The services also remove join
+rows and rules explicitly where the H2 test database has no cascading keys.
 
 ## Permission resolution
 
-```mermaid
-flowchart TD
-    A[checkPermission user, function] --> B{user exists?}
-    B -- no --> DENY[deny]
-    B -- yes --> S1{Step 1: user → endpoint rule?}
-    S1 -- match --> R[result of that step]
-    S1 -- none --> S2{Step 2: user's groups → endpoint rule?}
-    S2 -- match --> R
-    S2 -- none --> S3{Step 3: user → endpoint-group rule?}
-    S3 -- match --> R
-    S3 -- none --> S4{Step 4: user's groups → endpoint-group rule?}
-    S4 -- match --> R
-    S4 -- none --> DENY
-```
+![Permission resolution: input checks, admin bypass and the four rule steps](images/database-permission-resolution.png)
 
-- The **first step that matches** decides, from most specific to least specific.
-- If several rows match in one step, **any deny wins** (fail-closed).
-- If nothing matches, the result is **deny**.
+*Source: [`images/src/database-permission-resolution.mmd`](images/src/database-permission-resolution.mmd)*
 
-Example of seeding rules with SQL (there is no API for this yet):
+1. **Admins are always allowed.** Otherwise an empty rule table would lock them out as soon as the
+   DaaS application enables the check.
+2. For regular users, the **first step with a matching rule decides**, from the most specific step
+   to the least specific.
+3. A step can match several rules, for example when a user is in two groups with opposite rules.
+   **Any deny then wins** over an allow.
+4. If no step matches, the result is **deny** (fail-closed).
+
+## Useful queries
+
+Read-only queries for support and troubleshooting. Change data through the API, not with SQL.
 
 ```sql
-INSERT INTO endpoints (function_name, description) VALUES ('start_desktop', 'Start a VM');
-INSERT INTO endpoint_user_group_access (user_group_id, endpoint_id, allow_access)
-VALUES (1, LAST_INSERT_ID(), TRUE);
+-- Admin accounts
+SELECT id, name, email FROM users WHERE role = 'admin';
+
+-- Accounts that are currently locked
+SELECT id, email, failed_login_attempts, locked_until
+FROM users WHERE locked_until > NOW();
+
+-- Registrations that were never verified
+SELECT id, email, registration_code_timeout
+FROM users WHERE role = 'user' AND enabled = FALSE AND registration_code IS NOT NULL;
+
+-- Number of rules per kind
+SELECT 'USER_ENDPOINT' AS kind, COUNT(*) FROM endpoint_user_access
+UNION ALL SELECT 'USER_GROUP_ENDPOINT', COUNT(*) FROM endpoint_user_group_access
+UNION ALL SELECT 'USER_ENDPOINT_GROUP', COUNT(*) FROM endpoint_group_user_access
+UNION ALL SELECT 'USER_GROUP_ENDPOINT_GROUP', COUNT(*) FROM endpoint_group_user_group_access;
+
+-- Applied migrations
+SELECT version, description, installed_on, success FROM flyway_schema_history ORDER BY installed_rank;
 ```
+
+## Working with the schema
+
+- **Changing the schema:** add a new file `V<next>__<short_description>.sql`. Never edit a
+  migration that has already been applied: Flyway's checksum validation would stop the
+  application at startup.
+- **Testing a migration:** `FlywayPostgresIntegrationTest` applies all migrations to a real
+  PostgreSQL in a Testcontainers container and validates the entities against the result. It is
+  skipped when Docker is not available.
+- **Maintaining permission data:** use the
+  [permission management API](api.md#9-permission-management) rather than SQL. The API checks
+  that subjects and targets exist and rejects duplicate rules.
