@@ -1,7 +1,7 @@
 # User manual
 
 > **Audience:** users, administrators and frontend developers
-> **Last reviewed:** 2026-11-13 · [Documentation index](../README.md#documentation)
+> **Last reviewed:** 2026-11-18 · [Documentation index](../README.md#documentation)
 
 This manual walks through the typical tasks with `curl`. The DESIGN DaaS frontend performs the
 same calls. Every endpoint is described in full in the [API reference](api.md).

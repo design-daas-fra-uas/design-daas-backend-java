@@ -1,7 +1,7 @@
 # API reference
 
 > **Audience:** developers of the frontend and of the DaaS application (design-daas)
-> **Last reviewed:** 2026-11-13 · [Documentation index](../README.md#documentation)
+> **Last reviewed:** 2026-11-18 · [Documentation index](../README.md#documentation)
 
 This document lists every HTTP endpoint of the backend: who may call it, what to send, and what
 comes back. For exact field types, use the OpenAPI description that is generated from the code:

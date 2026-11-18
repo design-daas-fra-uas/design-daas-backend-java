@@ -1,7 +1,7 @@
 # Operations guide
 
 > **Audience:** operators and DevOps engineers
-> **Last reviewed:** 2026-11-13 · [Documentation index](../README.md#documentation)
+> **Last reviewed:** 2026-11-18 · [Documentation index](../README.md#documentation)
 
 This guide covers running the backend in a shared or production environment. Installation and the
 full list of environment variables are in the [README](../README.md#installation).
@@ -130,8 +130,9 @@ the schema version and applies only newer migrations.
    service does not start, and the previous image can be started again against the restored
    backup.
 
-There are no migration-specific notes yet: `V1` creates the whole schema. On PostgreSQL a
-failed migration is rolled back completely, so the schema is never left half changed.
+There are no migration-specific notes yet: `V1` creates the whole schema, and `V2` and `V3` add
+and remove one column of `endpoints`. On PostgreSQL a failed migration is rolled back completely,
+so the schema is never left half changed.
 
 ## Scaling
 
@@ -158,8 +159,8 @@ The API cannot change an admin's password (see risk R-22 in [arc42](arc42.md#111
 
   ```sql
   UPDATE users SET password = '<bcrypt hash>' WHERE email = 'admin@example.org' AND role = 'admin';
-  UPDATE access_tokens  SET revoked = TRUE, revoked_at = NOW(6) WHERE user_id = <id>;
-  UPDATE refresh_tokens SET revoked = TRUE, revoked_at = NOW(6) WHERE user_id = <id>;
+  UPDATE access_tokens  SET revoked = TRUE, revoked_at = NOW() WHERE user_id = <id>;
+  UPDATE refresh_tokens SET revoked = TRUE, revoked_at = NOW() WHERE user_id = <id>;
   ```
 
 Regular users' passwords are changed with `PATCH /user/{id}`, which revokes their tokens

@@ -1,7 +1,7 @@
 # Database
 
 > **Audience:** developers and database administrators
-> **Last reviewed:** 2026-11-13 · [Documentation index](../README.md#documentation)
+> **Last reviewed:** 2026-11-18 · [Documentation index](../README.md#documentation)
 
 ## In short
 
@@ -40,6 +40,8 @@
 | Version | File | Change |
 |---|---|---|
 | V1 | `V1__init.sql` | The whole schema: accounts, groups, desktops, permissions and tokens |
+| V2 | `V2__endpoint_obsolete.sql` | Adds `endpoints.obsolete`, so that endpoints missing from the sync of the DaaS application were marked instead of deleted |
+| V3 | `V3__drop_endpoint_obsolete.sql` | Drops `endpoints.obsolete` again: the sync now deletes endpoints that the DaaS application no longer has, together with their rules |
 
 Until 2026-11-17 the service ran on MariaDB with five migrations (V1–V5, see git history). On the
 move to PostgreSQL they were replaced by one script that creates the same final schema, and the
@@ -78,7 +80,7 @@ A scheduled job deletes expired rows from both token tables daily at 03:00 (JVM 
 
 ## Column reference
 
-Types are as created by `V1__init.sql`. "PK" is the primary key, "UK" a unique key and "FK"
+Types are as created by `V1__init.sql` (V2 and V3 leave no lasting change). "PK" is the primary key, "UK" a unique key and "FK"
 a foreign key (all foreign keys use `ON DELETE CASCADE`).
 
 ### `users`

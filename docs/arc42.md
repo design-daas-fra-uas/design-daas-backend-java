@@ -1,7 +1,7 @@
 # Architecture documentation (arc42)
 
 > **Audience:** architects and developers · **Template:** [arc42](https://arc42.org), version 8
-> **Last reviewed:** 2026-11-13 · [Documentation index](../README.md#documentation)
+> **Last reviewed:** 2026-11-18 · [Documentation index](../README.md#documentation)
 
 This document explains how the DESIGN DaaS backend is built and why. It follows arc42, a common
 template for architecture documentation. The requirement ids (FA-*n* for functional, NFA-*n* for
@@ -379,16 +379,16 @@ immediately.
 
 ### 8.8 Testing
 
-| Level | Tool | Count (2026-11-13) |
+| Level | Tool | Count (2026-11-18) |
 |---|---|---|
-| Unit tests | JUnit 5, Mockito, AssertJ | 253 in 33 classes |
-| Integration tests | Spring Boot test context, MockMvc, H2 | 96 in 12 classes |
+| Unit tests | JUnit 5, Mockito, AssertJ | 258 in 33 classes |
+| Integration tests | Spring Boot test context, MockMvc, H2 | 100 in 12 classes |
 | Migration test | Testcontainers with PostgreSQL 18 | 1 (needs Docker) |
 | Architecture tests | ArchUnit | 19 rules |
 | End-to-end tests | Playwright, in the `design-daas-e2e` repository | Separate suite |
 
 The build fails if a test fails, an ArchUnit rule is broken, or line or branch coverage drops
-below 80 %. The last run reached 95.6 % line and 87.3 % branch coverage.
+below 80 %. The last run reached 95.8 % line and 88.1 % branch coverage.
 
 ### 8.9 Documentation
 
@@ -409,7 +409,7 @@ Javadoc, and each module has a `package-info.java`. The conventions are in the
 | ADR-7 | Single-table inheritance for `Admin` and `User` | One e-mail namespace and one login path for both roles | A new role needs a new subclass and authority |
 | ADR-8 | Resolve conflicts within a cascade step by "deny wins" | The PHP backend's result depended on random group order | Deterministic and fail-closed (NFA-1) |
 | ADR-9 | Admins bypass the permission cascade | An empty rule table would otherwise lock admins out of the DaaS application | Single-user rules for admin accounts are rejected, because they would never be evaluated |
-| ADR-10 | Permission data is maintained through the API; uniqueness enforced by V5 | Administrators need no database access | Duplicate rules are rejected with `409` |
+| ADR-10 | Permission data is maintained through the API; uniqueness enforced by unique constraints in V1 | Administrators need no database access | Duplicate rules are rejected with `409` |
 | ADR-11 | In-memory rate limiting | Simple and sufficient for one instance | Limits are per instance; a gateway or Redis is needed for strict limits across replicas |
 
 ## 10. Quality requirements
@@ -423,7 +423,7 @@ Javadoc, and each module has a `package-info.java`. The conventions are in the
 ### 10.2 Quality scenarios
 
 A quality scenario describes a concrete situation and the reaction the system must show. The
-results are from the test run of 2026-11-13 (`mvn verify`: 369 tests, 0 failures, 1 skipped).
+results are from the test run of 2026-11-18 (`mvn verify`: 378 tests, 0 failures, 0 skipped).
 
 | Id | Scenario | Expected response | Requirement | Verified by | Result |
 |---|---|---|---|---|---|
@@ -435,58 +435,10 @@ results are from the test run of 2026-11-13 (`mvn verify`: 369 tests, 0 failures
 | QS-6 | A refresh token is used twice | The second use returns `401 invalid_grant` | FA-2 | `TokenControllerIntegrationTest` | ✅ Pass |
 | QS-7 | A contributor puts a service in the wrong package | `mvn verify` fails | NFA-8 | `ArchitectureTest` | ✅ Pass |
 | QS-8 | A change lowers line or branch coverage below 80 % | `mvn verify` fails | NFA-9 | JaCoCo `check` goal | ✅ Pass |
-| QS-9 | A migration does not match the entities | The PostgreSQL integration test fails | ADR-6 | `FlywayPostgresIntegrationTest` | ✅ Pass (2026-11-17, PostgreSQL 18) |
+| QS-9 | A migration does not match the entities | The PostgreSQL integration test fails | ADR-6 | `FlywayPostgresIntegrationTest` | ✅ Pass (2026-11-18, PostgreSQL 18) |
 | QS-10 | An unexpected exception occurs | `500` with a support reference only | Security | `GlobalExceptionHandlerTest` | ✅ Pass |
 
-## 11. Risks and technical debt
-
-Severity:  **High** (fix before production use) · **Medium** (fix soon) · **Low** (improve
-when the code is touched) · **Info** (worth knowing). Each entry was checked against the code on
-2026-11-13.
-
-### 11.1 Open risks and technical debt
-
-| Id | Severity | Finding | Location | Suggested measure |
-|---|---|---|---|---|
-| R-1 | Medium | Refresh tokens are stored in plain text. A database leak exposes usable tokens, and reusing a revoked token does not revoke the rest of the user's tokens | `TokenIssuer`, `RefreshTokenRepository` | Store a SHA-256 hash; revoke all of a user's tokens when a revoked token is reused |
-| R-3 | Medium | Accounts can still be enumerated: a locked account answers `429` before the password check, and `POST /user` answers `400 Email already in use` | `TokenService`, `AccountValidator` | Accept and document, or return uniform responses |
-| R-4 | Low | The application package logs at `DEBUG` in every profile, including `prod`. With mail disabled, registration codes appear in the log | `application.yml` | Set `INFO` in `application-prod.yml` |
-| R-5 | Low | The account lockout is reset only by a successful login. One failure after the lock expires locks the account again, and admins cannot lift a lock | `AccountLockoutService` | Reset the counter when the lock expires; add an admin unlock |
-| R-6 | Low | `EmailAlreadyInUseException` extends `IllegalArgumentException` and therefore returns `400` instead of `409` | `user.exception` | Extend `ConflictException`. This changes the API contract |
-| R-7 | Low | The container runs as root and has no `HEALTHCHECK`. No Maven wrapper is committed (`.mvn/` is git-ignored) | `Dockerfile`, `.gitignore` | Add a `USER` and a `HEALTHCHECK`; commit `mvnw` |
-| R-10 | Low | `auth` ↔ `user` and `user` ↔ `desktop` depend on each other in both directions. ArchUnit checks layers but not cycles between modules | Module structure | Add a `slices().should().beFreeOfCycles()` rule; move `JwtUserResolver` usage behind an interface |
-| R-11 | Low | List endpoints are not paginated and load associations lazily (N+1 queries) | Services, DTO mappers | Fetch joins or `@EntityGraph`; `Pageable` |
-| R-12 | Low | Each authenticated request makes two database reads (token and account) | `TokenRevocationValidator` | A short-lived cache or a single join query |
-| R-13 | Low | `.env.example` uses `DB_PASSWORD=design_password`, while the defaults and the README use `design`. Its `MAIL_SMTP_AUTH` and `MAIL_SMTP_STARTTLS` are not read by the application | `.env.example`, `application.yml` | Align the values; remove the unused variables or wire them |
-| R-14 | Info | CORS allows credentials, which bearer tokens do not need | `CorsConfig` | Disable unless cookies are introduced |
-| R-15 | Info | The OpenAPI document reports version `1.0.0`; the build is `2.0.0` | `OpenApiConfig` | Read the version from build information |
-| R-16 | Info | Token entities use `Instant.now()` in `revoke()` instead of the injected `Clock` | `auth.model` | Pass the time in |
-| R-17 | Info | The `{isoCode}` path variable is validated but unused | `UserController` | Use it in the e-mail, or document it as reserved |
-| R-18 | Info | Two classes are named `UserNotFoundException` (`auth.exception` → 401, `user.exception` → 404) | Exceptions | Rename the `auth` one |
-| R-19 | Info | `AuthorizationServerConfig` configures JWT keys, not an authorization server | `config` | Rename to `JwtConfig` |
-| R-21 | Info | The repository has no licence file | Repository root | Agree on a licence with the university and add `LICENSE` |
-| R-22 | Low | An admin's own password cannot be changed through the API (`PATCH /user/{id}` only accepts regular users). The DESIGN installer works around this with a script that writes the hash into the database | `AdminController` | Add `PATCH /admin/{id}` or a "change my password" endpoint |
-| R-23 | Low | The backend does not evaluate `X-Forwarded-Prefix`. Behind nginx at `/auth/`, Swagger UI may therefore show server URLs without the prefix. Not verified | `application.yml` | Set `server.forward-headers-strategy: framework` and test Swagger behind the proxy |
-| R-24 | Info | The DaaS application caches permission answers for 30 seconds, so rule changes take up to 30 seconds to apply there | design-daas | Document for admins (done); shorten the cache if needed |
-
-### 11.2 Resolved
-
-| Former finding | Resolution | Status |
-|---|---|---|
-| Default admin with a well-known password created in production | Disabled in `prod` unless `ADMIN_INIT_ENABLED=true` | ✅ Fixed |
-| Dummy hash cheaper than real hashes (timing-based enumeration) | Dummy hash is created at startup with the configured encoder | ✅ Fixed |
-| Health endpoint required a token | `/actuator/health` is public and shows only the overall status | ✅ Fixed |
-| `/version` was public but had no handler | Rule removed; the health endpoint replaces it | ✅ Fixed |
-| Token endpoint accepted JSON but ignored it | Only form data is accepted; JSON returns `415` | ✅ Fixed |
-| Migrations were never tested against the real database | `FlywayPostgresIntegrationTest` (Testcontainers; was `FlywayMariaDbIntegrationTest` until the move to PostgreSQL) | ✅ Fixed |
-| Token bucket lost fractional refills; bucket map grew without bound | Fractions are kept; full buckets are evicted every five minutes | ✅ Fixed |
-| No API for deleting resources or maintaining permission rules | Delete endpoints and the permission management API | ✅ Fixed |
-| Duplicate rules possible | Unique constraints in V5 | ✅ Fixed |
-| The last-admin check could be bypassed by two concurrent deletions | The admin rows are locked (`SELECT … FOR UPDATE`) and counted from the locked result | ✅ Fixed |
-| The 500 support reference was a separate UUID, unrelated to the request's other log lines | The reference is now the request id | ✅ Fixed |
-| Rules for admin accounts were accepted although admins bypass the cascade | Single-user rules for admins are rejected with `400` | ✅ Fixed |
-
-## 12. Glossary
+## 11. Glossary
 
 | Term | Definition |
 |---|---|

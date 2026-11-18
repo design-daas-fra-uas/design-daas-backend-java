@@ -1,7 +1,7 @@
 # Developer guide
 
 > **Audience:** developers working on the backend
-> **Last reviewed:** 2026-11-13 · [Documentation index](../README.md#documentation)
+> **Last reviewed:** 2026-11-18 · [Documentation index](../README.md#documentation)
 
 ## In short
 
@@ -48,7 +48,7 @@ src/main/java/de/frauas/design/backend/
 
 src/main/resources/
 ├── application.yml, application-{local,dev,prod}.yml
-├── db/migration/    Flyway scripts (V1: the whole schema)
+├── db/migration/    Flyway scripts (V1: the whole schema; V2, V3)
 └── templates/mail/  Thymeleaf e-mail templates
 
 src/test/java/de/frauas/design/backend/
@@ -80,10 +80,10 @@ mvn test -Dtest='*IntegrationTest'         # integration tests only
 mvn verify                                 # everything, plus the JaCoCo report
 ```
 
-| Test type | Scope | Database | Count (2026-11-13) |
+| Test type | Scope | Database | Count (2026-11-18) |
 |---|---|---|---|
-| Unit tests | One class, dependencies mocked with Mockito | None | 253 in 33 classes |
-| Integration tests | Full Spring context and security chain via MockMvc (`BaseIntegrationTest`) | H2 in PostgreSQL mode, schema generated from the entities | 96 in 12 classes |
+| Unit tests | One class, dependencies mocked with Mockito | None | 258 in 33 classes |
+| Integration tests | Full Spring context and security chain via MockMvc (`BaseIntegrationTest`) | H2 in PostgreSQL mode, schema generated from the entities | 100 in 12 classes |
 | Migration test | `FlywayPostgresIntegrationTest` runs all Flyway migrations on PostgreSQL 18 and validates the entities | PostgreSQL in Testcontainers; **skipped without Docker** | 1 |
 | Architecture test | `ArchitectureTest` checks layering, naming and dependency rules | None | 19 rules |
 
