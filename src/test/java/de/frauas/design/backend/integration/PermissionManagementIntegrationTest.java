@@ -23,6 +23,7 @@ import java.util.Optional;
 
 import static de.frauas.design.backend.integration.MockJwt.adminJwt;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static de.frauas.design.backend.integration.MockJwt.userJwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -163,6 +164,25 @@ class PermissionManagementIntegrationTest extends BaseIntegrationTest {
                         .content("{\"functionName\":\"x\"}"))
                 .andExpect(status().is4xxClientError());
         mockMvc.perform(delete("/endpoint/" + endpointId).with(adminJwt(999))).andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    @DisplayName("GET /endpoints – lists the synced endpoints, a changed description is updated")
+    void listEndpoints_showsSyncedDescription() throws Exception {
+        String byName = "$[?(@.functionName == '" + FUNCTION + "')]";
+        syncEndpoints(List.of(Map.of("functionName", FUNCTION, "description", "first"))).andExpect(status().isOk());
+        Integer endpointId = endpointRepository.findByFunctionName(FUNCTION).orElseThrow().getId();
+        mockMvc.perform(get("/endpoints").with(adminJwt(999)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(byName + ".id").value(contains(endpointId)))
+                .andExpect(jsonPath(byName + ".description").value(contains("first")));
+
+        syncEndpoints(List.of(Map.of("functionName", FUNCTION, "description", "second")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.updated").value(1));
+        mockMvc.perform(get("/endpoints").with(adminJwt(999)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(byName + ".description").value(contains("second")));
     }
 
     @Test
