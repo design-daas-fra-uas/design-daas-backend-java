@@ -42,12 +42,81 @@ interface that the frontend and the DaaS application already use, so both keep w
 
 ## Installing the complete system
 
-When the backend runs in the `local` or `dev` profile, the interactive API description is
-available at <http://localhost:8080/swagger-ui.html>.
+This service is **not installed on its own**. The complete system (DaaS backend, frontend, this
+auth service, Proxmox, desktops) is installed by the installer in the `design-daas` repository.
+It builds this service as a container (`daas-auth.service`, listening on `127.0.0.1:8080` only),
+creates its database in the system's PostgreSQL and the first admin account. No Java or Maven
+is needed on the host for that.
 
-## Quick start
+1. Clone these three repositories next to each other (into the same folder):
+   `design-daas`, `design-daas-application-frontend` and `design-daas-backend-java`
+2. Set the needed values in `design-daas/installer/daas.env`. Which keys of that file set this
+   service's settings is shown in [Configuration](#configuration).
+3. Run the installer.
 
-Requires JDK 21, Maven 3.9+ and Docker.
+Every step, from a freshly installed operating system to the first login, is described in the
+**[design-daas README → Installation: from a blank machine to a running system](https://github.com/design-daas-fra-uas/design-daas)**.
+
+The rest of this README is only about running the service for **development and debugging**.
+
+## Configuration
+
+All settings are in `src/main/resources/application.yml` and can be overridden with environment
+variables. In the complete system the installer sets them from `design-daas/installer/daas.env`
+(column *From `daas.env`*, see `design-daas/installer/auth/docker-compose.yml`); a `–` means the
+installer leaves the default.
+
+| Variable | Default | From `daas.env` | Description |
+|---|---|---|---|
+| `SPRING_PROFILES_ACTIVE` | `local` | `AUTH_PROFILE` (default `prod`) | `local`, `dev` or `prod` |
+| `DB_URL` | `jdbc:postgresql://localhost:5432/design_backend` | `AUTH_DB_NAME` (database in the system's PostgreSQL on `127.0.0.1:5432`) | JDBC URL |
+| `DB_USERNAME`, `DB_PASSWORD` | `design`, `design` | `AUTH_DB_USER`, `AUTH_DB_PASSWORD` | Database credentials |
+| `OAUTH_ISSUER` | `http://localhost:8080` | `AUTH_PUBLIC_URL` | `iss` claim of issued tokens; checked on every request |
+| `OAUTH_KEYS_DIR` | `./keys` | – (fixed `/app/keys`, a docker volume) | Directory of the signing key `rsa-jwk.json` |
+| `OAUTH_ACCESS_TOKEN_TTL_SECONDS` | `3600` | same name | Access-token lifetime |
+| `OAUTH_REFRESH_TOKEN_TTL_DAYS` | `30` | same name | Refresh-token lifetime |
+| `ADMIN_INIT_ENABLED` | `true` (`false` in `prod`) | – (always `true`) | Create the default admin at startup |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | `admin@design.local`, `Admin123!` | same names (**change them**) | Default admin credentials |
+| `MAIL_ENABLED` | `false` | same name | Send e-mails. If `false`, registration codes are only logged at `DEBUG` |
+| `MAIL_HOST`, `MAIL_PORT` | `smtp.gmail.com`, `587` | same names | SMTP server (STARTTLS) |
+| `MAIL_USERNAME`, `MAIL_PASSWORD` | empty | same names | SMTP credentials |
+| `MAIL_FROM` | `noreply@design.local` | same name | Sender address; also receives application-access requests |
+| `FRONTEND_URL` | `http://localhost:3000` | `FRONTEND_PUBLIC_URL` | Frontend origin |
+| `CORS_ALLOWED_ORIGINS` | value of `FRONTEND_URL` | `FRONTEND_PUBLIC_URL` | Comma-separated list of exact origins |
+| `RATE_LIMITING_ENABLED` | `true` | – | Per-IP rate limiting on the public endpoints |
+| `RATE_LIMIT_AUTH_TOKEN` | `20` | – | Requests per minute on `POST /oauth2/user/token` |
+| `RATE_LIMIT_REGISTER` | `5` | – | Requests per minute on `POST /user` |
+| `RATE_LIMIT_VALIDATE_EMAIL` | `10` | – | Requests per minute on `POST /user/validate_email` |
+| `RATE_LIMIT_RESEND_CODE` | `3` | – | Requests per minute on `POST /user/resend_code` |
+| `RATE_LIMIT_TRUSTED_PROXIES` | `127.0.0.1/32,::1/128` | – (fixed to the same value: nginx) | Proxies whose `X-Forwarded-For` header is trusted |
+
+In the complete system the port is `AUTH_PORT` (default `8080`), and the service listens on
+`127.0.0.1` only (`SERVER_PORT`, `SERVER_ADDRESS`). At least set `ADMIN_EMAIL`,
+`ADMIN_PASSWORD` and `AUTH_DB_PASSWORD` in `daas.env`; everything else has working defaults.
+
+Properties without a dedicated environment variable. Set them in a profile file or on the command
+line, for example `--app.token.cleanup.cron="0 0 4 * * *"`:
+
+| Property | Default | Description |
+|---|---|---|
+| `app.token.cleanup.cron` | `0 0 3 * * *` | Schedule of the expired-token cleanup (JVM time zone) |
+| `app.rate-limiting.eviction-interval-ms` | `300000` | How often idle rate-limit buckets are removed |
+| `app.security.swagger-public` | `false` (`true` in `local` and `dev`) | Serve Swagger UI without authentication |
+
+### Profiles
+
+| Profile | Behaviour |
+|---|---|
+| `local` (default), `dev` | Swagger UI and `/v3/api-docs` are public |
+| `prod` | Swagger UI and the API description are disabled; the default admin is created only when `ADMIN_INIT_ENABLED=true` |
+| `test` | Used by the test suite: H2, Flyway off, rate limiting off |
+
+## Development
+
+### Quick start
+
+Requires JDK 21, Maven 3.9+ and Docker (installation on Debian 12: see
+[Prerequisites](#prerequisites)).
 
 ```bash
 # 1. Start PostgreSQL
@@ -74,8 +143,6 @@ curl -X POST http://localhost:8080/oauth2/user/token \
 > create this account unless `ADMIN_INIT_ENABLED=true`. See the
 > [production checklist](docs/operations.md#production-checklist).
 
-## Installation
-
 ### Prerequisites
 
 | Tool | Version | Notes |
@@ -85,6 +152,38 @@ curl -X POST http://localhost:8080/oauth2/user/token \
 | PostgreSQL | 15 or later | Tested with 18 |
 | Docker | Current | Optional: local PostgreSQL, container build, migration test |
 | SMTP account | – | Optional; required for registration e-mails (`MAIL_ENABLED=true`) |
+
+Debian 12 ships neither Java 21 nor Maven 3.9. Install them, and Docker, as root:
+
+```bash
+apt-get update
+apt-get install -y git curl wget ca-certificates gpg docker.io
+usermod -aG docker <your-user>      # docker without sudo; log out and in again afterwards
+
+# JDK 21 (Eclipse Temurin)
+wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public \
+  | gpg --dearmor -o /etc/apt/trusted.gpg.d/adoptium.gpg
+echo "deb https://packages.adoptium.net/artifactory/deb bookworm main" \
+  > /etc/apt/sources.list.d/adoptium.list
+apt-get update
+apt-get install -y temurin-21-jdk
+
+# Maven 3.9
+cd /tmp
+curl -fsSLO https://archive.apache.org/dist/maven/maven-3/3.9.11/binaries/apache-maven-3.9.11-bin.tar.gz
+tar -xzf apache-maven-3.9.11-bin.tar.gz -C /opt
+ln -sf /opt/apache-maven-3.9.11/bin/mvn /usr/local/bin/mvn
+
+java -version       # version "21..."
+mvn -version        # Apache Maven 3.9.11, Java version 21
+```
+
+Then get the code (as your normal user):
+
+```bash
+git clone https://github.com/design-daas-fra-uas/design-daas-backend-java.git
+cd design-daas-backend-java
+```
 
 ### Run from source
 
@@ -122,7 +221,10 @@ On startup the service:
 - creates the JWT signing key `rsa-jwk.json` in `OAUTH_KEYS_DIR` if it does not exist yet, and
 - creates the default admin, if enabled and the e-mail address is not taken.
 
-### Run as a container
+### Build and run the container image
+
+The complete system builds and runs this image through the installer (see
+[Installing the complete system](#installing-the-complete-system)). To try the image on its own:
 
 ```bash
 docker build -t design-daas-backend:2.0.0 .
@@ -173,52 +275,6 @@ volumes:
 ```
 
 </details>
-
-## Configuration
-
-All settings are in `src/main/resources/application.yml` and can be overridden with environment
-variables.
-
-| Variable | Default | Description |
-|---|---|---|
-| `SPRING_PROFILES_ACTIVE` | `local` | `local`, `dev` or `prod` |
-| `DB_URL` | `jdbc:postgresql://localhost:5432/design_backend` | JDBC URL |
-| `DB_USERNAME`, `DB_PASSWORD` | `design`, `design` | Database credentials |
-| `OAUTH_ISSUER` | `http://localhost:8080` | `iss` claim of issued tokens; checked on every request |
-| `OAUTH_KEYS_DIR` | `./keys` | Directory of the signing key `rsa-jwk.json` |
-| `OAUTH_ACCESS_TOKEN_TTL_SECONDS` | `3600` | Access-token lifetime |
-| `OAUTH_REFRESH_TOKEN_TTL_DAYS` | `30` | Refresh-token lifetime |
-| `ADMIN_INIT_ENABLED` | `true` (`false` in `prod`) | Create the default admin at startup |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | `admin@design.local`, `Admin123!` | Default admin credentials. **Change them** |
-| `MAIL_ENABLED` | `false` | Send e-mails. If `false`, registration codes are only logged at `DEBUG` |
-| `MAIL_HOST`, `MAIL_PORT` | `smtp.gmail.com`, `587` | SMTP server (STARTTLS) |
-| `MAIL_USERNAME`, `MAIL_PASSWORD` | empty | SMTP credentials |
-| `MAIL_FROM` | `noreply@design.local` | Sender address; also receives application-access requests |
-| `FRONTEND_URL` | `http://localhost:3000` | Frontend origin |
-| `CORS_ALLOWED_ORIGINS` | value of `FRONTEND_URL` | Comma-separated list of exact origins |
-| `RATE_LIMITING_ENABLED` | `true` | Per-IP rate limiting on the public endpoints |
-| `RATE_LIMIT_AUTH_TOKEN` | `20` | Requests per minute on `POST /oauth2/user/token` |
-| `RATE_LIMIT_REGISTER` | `5` | Requests per minute on `POST /user` |
-| `RATE_LIMIT_VALIDATE_EMAIL` | `10` | Requests per minute on `POST /user/validate_email` |
-| `RATE_LIMIT_RESEND_CODE` | `3` | Requests per minute on `POST /user/resend_code` |
-| `RATE_LIMIT_TRUSTED_PROXIES` | `127.0.0.1/32,::1/128` | Proxies whose `X-Forwarded-For` header is trusted |
-
-Properties without a dedicated environment variable. Set them in a profile file or on the command
-line, for example `--app.token.cleanup.cron="0 0 4 * * *"`:
-
-| Property | Default | Description |
-|---|---|---|
-| `app.token.cleanup.cron` | `0 0 3 * * *` | Schedule of the expired-token cleanup (JVM time zone) |
-| `app.rate-limiting.eviction-interval-ms` | `300000` | How often idle rate-limit buckets are removed |
-| `app.security.swagger-public` | `false` (`true` in `local` and `dev`) | Serve Swagger UI without authentication |
-
-### Profiles
-
-| Profile | Behaviour |
-|---|---|
-| `local` (default), `dev` | Swagger UI and `/v3/api-docs` are public |
-| `prod` | Swagger UI and the API description are disabled; the default admin is created only when `ADMIN_INIT_ENABLED=true` |
-| `test` | Used by the test suite: H2, Flyway off, rate limiting off |
 
 ## Security
 
